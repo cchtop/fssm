@@ -108,10 +108,20 @@
 
 <script>
 /* API URL 管理 */
-const apiInput = document.getElementById('apiUrl');
-apiInput.value = localStorage.getItem('apiUrl') || '';
-apiInput.addEventListener('change', ()=> localStorage.setItem('apiUrl', apiInput.value));
-function api(){ const u = apiInput.value.trim(); if(!u){ alert('請先在上方貼上 API URL'); throw new Error('no api'); } return u; }
+// 共用 API 讀取：先用 input，其次 localStorage
+function api(){
+  const el = document.querySelector('#apiUrl');
+  const u = (el && el.value.trim()) || localStorage.getItem('apiUrl') || '';
+  if(!u){ alert('請先貼上 API URL'); throw new Error('no api'); }
+  if(el && el.value.trim()) localStorage.setItem('apiUrl', el.value.trim());
+  return u;
+}
+
+// 只用 GET 查詢資料
+async function GET(p){ const r = await fetch(api()+'?'+new URLSearchParams(p)); return r.json(); }
+
+// ⛳ 重點：不要自訂 Content-Type，直接把 JSON 字串放 body，就不會觸發 CORS 預檢
+async function POST(obj){ const r = await fetch(api(), { method:'POST', body: JSON.stringify(obj) }); return r.json(); }
 
 /* 外部掃描器：掃完回這頁 ?barcode=XXXXX */
 (function(){
