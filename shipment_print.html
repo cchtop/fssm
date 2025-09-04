@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出貨單</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<style>
+  body{padding:12px;font-size:12px}
+  table{border-collapse:collapse;width:100%}
+  th,td{border:1px solid #333;padding:6px;text-align:center}
+  .title{font-size:16px;font-weight:700;text-align:center;margin:6px 0 10px}
+  .meta td{text-align:left}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  @media print{ .noprint{display:none} }
+</style>
+</head>
+<body>
+<div class="noprint mb-2">
+  <label class="form-label">API URL（GAS /exec）</label>
+  <input id="apiUrl" class="form-control" placeholder="若留空則使用本機儲存的 API URL">
+  <button id="btnLoad" class="btn btn-primary mt-2">載入</button>
+  <button onclick="window.print()" class="btn btn-outline-secondary mt-2">列印</button>
+</div>
+
+<div id="root"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+function api(){
+  const p = $('#apiUrl').value.trim() || localStorage.getItem('apiUrl') || '';
+  if(!p){ alert('請先填 API URL'); throw new Error('no api'); }
+  return p;
+}
+async function load(){
+  const id = new URL(location.href).searchParams.get('ship_id');
+  if(!id){ document.body.innerHTML='<p class="text-danger">缺少 ship_id</p>'; return; }
+  const r = await fetch(api()+'?'+new URLSearchParams({action:'getshipment', ship_id:id}));
+  const j = await r.json(); if(!j.ok){ $('#root').innerHTML='<p class="text-danger">找不到出貨單</p>'; return; }
+
+  const h=j.header, lines=j.lines||[];
+  $('#root').innerHTML = `
+    <div class="title">出貨單 - <span class="mono">${id}</span></div>
+    <table class="meta mb-2">
+      <tr><td>出貨日期：${h.date||''}</td><td>客戶：${h.vendor_name||''}</td><td>聯絡人：${h.contact||''}</td></tr>
+      <tr><td colspan="3">地址：${h.address||''}　電話：${h.phone||''}</td></tr>
+    </table>
+    <table class="mb-2">
+      <thead><tr>
+        <th>序</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th>
+        <th>儲位</th><th>效期</th><th>出貨量</th><th>單價</th><th>金額</th>
+      </tr></thead>
+      <tbody>
+        ${lines.map((ln,i)=>`<tr>
+          <td>${i+1}</td><td class="mono">${ln.barcode||''}</td><td class="mono">${ln.code||''}</td>
+          <td>${ln.item||''}</td><td>${ln.spec||''}</td><td>${ln.loc||''}</td><td>${ln.exp||''}</td>
+          <td class="mono">${ln.qty_out||0}</td><td class="mono">${ln.unit_price||0}</td><td class="mono">${ln.amount||0}</td>
+        </tr>`).join('')}
+        <tr><td colspan="9" style="text-align:right">合計</td><td class="mono">${lines.reduce((a,c)=>a+Number(c.amount||0),0)}</td></tr>
+      </tbody>
+    </table>
+    <p>備註：${h.note||''}</p>
+  `;
+}
+$('#apiUrl').value = localStorage.getItem('apiUrl') || '';
+document.getElementById('btnLoad').onclick = load;
+load();
+</script>
+</body>
+</html>
