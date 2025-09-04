@@ -11,7 +11,7 @@
 
 <div class="mb-3">
   <label class="form-label">API URL（GAS /exec）</label>
-  <input id="apiUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycbyCFJNSizgj8E9n3DAdGTygeD5Lj5sT-30GpmUG9xO1ZXiso9bSNxTjNrh4SWtJo0BJ/exec">
+  <input id="apiUrl" class="form-control" placeholder="貼上你的 Apps Script /exec URL">
 </div>
 
 <div class="card mb-3">
@@ -82,13 +82,22 @@
 <script>
 const $ = s => document.querySelector(s);
 const state = { lines:[], ship_id:null, vendors:[], productsCache:{} };
-function api(){ const u=$('#apiUrl').value.trim(); if(!u){ alert('請先貼上 API URL'); throw new Error('no api'); } return u; }
+
+function api(){
+  const u = $('#apiUrl').value.trim() || localStorage.getItem('apiUrl') || '';
+  if(!u){ alert('請先貼上 Apps Script /exec URL'); throw new Error('no api'); }
+  // 記住給其它頁（含列印頁）共用
+  if($('#apiUrl').value.trim()) localStorage.setItem('apiUrl', $('#apiUrl').value.trim());
+  return u;
+}
+
 function todayStr(){ const d=new Date(),z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
 async function GET(p){ const r=await fetch(api()+'?'+new URLSearchParams(p)); return r.json(); }
-async function POST(obj){ const r=await fetch(api(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}); return r.json(); }
+// ↓↓↓ 關鍵：不要自訂 Content-Type，避免 CORS 預檢
+async function POST(obj){ const r=await fetch(api(),{method:'POST', body:JSON.stringify(obj)}); return r.json(); }
 
 async function init(){
-  // 記住 API
+  // 共用 API URL
   $('#apiUrl').value = localStorage.getItem('apiUrl') || '';
   $('#apiUrl').addEventListener('change', ()=> localStorage.setItem('apiUrl', $('#apiUrl').value));
   $('#shipDate').value = todayStr();
@@ -97,34 +106,40 @@ async function init(){
   const ret = encodeURIComponent(`${location.origin}${location.pathname}?q={CODE}`);
   $('#btnScan').href = `zxing://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,CODE_128,ITF`;
 
-  // 若有 ?q= 直接帶入
-  const q = new URL(location.href).searchParams.get('q'); if(q){ $('#searchKey').value=q; lookupAndPrefill(); history.replaceState({},'',location.pathname); }
+  // 有 ?q= 直接查商品
+  const q = new URL(location.href).searchParams.get('q');
+  if(q){ $('#searchKey').value=q; lookupAndPrefill(); history.replaceState({},'',location.pathname); }
 
   $('#searchKey').addEventListener('keydown', e=>{ if(e.key==='Enter'){ lookupAndPrefill(); }});
   $('#btnAdd').onclick = addLine;
   $('#btnSaveDraft').onclick = saveDraft;
   $('#btnCommit').onclick = commitShipment;
+
   $('#btnNewVendor').onclick = async ()=>{
     const name = prompt('輸入新客戶/供應商名稱'); if(!name) return;
-    const v = await POST({action:'savevendor', vendor:{ name }});
+    const v = await POST({action:'savevendor', vendor:{name}});
     await loadVendors(v.vendor_id);
   };
 
   await loadVendors();
   await loadRecents();
 }
+
 async function loadVendors(selected){
   const res = await GET({action:'listvendors'});
-  const list = res.rows || []; state.vendors = list;
+  const list = res.rows || [];
+  state.vendors = list;
   $('#vendorSel').innerHTML = `<option value="">（選擇/可空白）</option>` + list.map(v=>`<option value="${v.vendor_id}">${v.name}</option>`).join('');
-  if(selected) $('#vendorSel').value=selected;
+  if(selected) $('#vendorSel').value = selected;
   $('#vendorSel').onchange = ()=>{
     const v = state.vendors.find(x=>x.vendor_id===$('#vendorSel').value);
     $('#contact').value = v?.contact||''; $('#phone').value=v?.phone||''; $('#address').value=v?.address||'';
   };
 }
+
 async function loadRecents(){
-  const res = await GET({action:'listshipments'}); const rows=(res.rows||[]).slice(-10).reverse();
+  const res = await GET({action:'listshipments'});
+  const rows = (res.rows||[]).slice(-10).reverse();
   $('#recents').innerHTML = rows.map(r=>`<tr>
     <td class="mono">${r.ship_id}</td><td>${r.date}</td><td>${r.vendor_name||''}</td><td>${r.status}</td>
     <td>${r.pdf_url?`<a target="_blank" href="${r.pdf_url}">開啟</a>`:''}</td>
@@ -136,13 +151,16 @@ async function lookupAndPrefill(){
   const res = await GET({action:'products', q:key}); const list = res.rows||[];
   if(!list.length){ alert('找不到商品'); return; }
   const p = list[0]; state.productsCache[p.code]=p;
-  $('#lineLoc').value = p.default_loc||''; // 預設儲位
-  $('#searchKey').dataset.code = p.code; $('#searchKey').dataset.barcode = p.barcode||'';
-  $('#searchKey').dataset.item = p.item||''; $('#searchKey').dataset.spec = p.spec||'';
+  $('#lineLoc').value = p.default_loc||'';
+  $('#searchKey').dataset.code = p.code;
+  $('#searchKey').dataset.barcode = p.barcode||'';
+  $('#searchKey').dataset.item = p.item||'';
+  $('#searchKey').dataset.spec = p.spec||'';
 }
 
 function addLine(){
-  const code = $('#searchKey').dataset.code; if(!code){ alert('請先輸入條碼/料號/關鍵字並按 Enter'); return; }
+  const code = $('#searchKey').dataset.code;
+  if(!code){ alert('請先輸入條碼/料號/關鍵字並按 Enter'); return; }
   const line = {
     barcode: $('#searchKey').dataset.barcode||'',
     code, item: $('#searchKey').dataset.item||'', spec: $('#searchKey').dataset.spec||'',
@@ -151,9 +169,9 @@ function addLine(){
   };
   line.amount = line.qty_out * line.unit_price;
   state.lines.push(line); renderLines();
-  // 清空
   $('#searchKey').value=''; $('#searchKey').dataset.code=''; $('#lineExp').value=''; $('#lineQty').value=1; $('#linePrice').value=0;
 }
+
 function renderLines(){
   $('#lineBody').innerHTML = state.lines.map((ln,i)=>`
     <tr>
@@ -170,21 +188,25 @@ function header(){
   return { date: $('#shipDate').value||todayStr(), vendor_id:v?.vendor_id||'', vendor_name:v?.name||'',
            contact:$('#contact').value, phone:$('#phone').value, address:$('#address').value, note:$('#note').value };
 }
+
 async function saveDraft(){
   if(!state.lines.length){ alert('請先加入至少一筆明細'); return; }
   const res = await POST({action:'createshipment', header:header(), lines:state.lines});
   if(res.ok){ state.ship_id=res.ship_id; $('#saveMsg').innerText = `草稿已儲存：${res.ship_id}`; await loadRecents(); }
   else alert(res.error||'儲存失敗');
 }
+
 async function commitShipment(){
   if(!state.ship_id){ await saveDraft(); if(!state.ship_id) return; }
   const res = await POST({action:'commitshipment', ship_id:state.ship_id});
   if(res.ok){
-    alert('出貨完成，庫存已扣。'); state.ship_id=null; state.lines=[]; renderLines(); $('#saveMsg').innerText='';
-    // 開啟印單網址（後端回傳 print_url；若沒給就用本機）
-    const url = res.print_url || `${location.origin}/shipment_print.html?ship_id=${encodeURIComponent(res.ship_id)}`;
-    window.open(url, '_blank'); await loadRecents();
-  } else alert(res.error||'出貨失敗');
+    alert('出貨完成，庫存已扣。'); const sid = res.ship_id||state.ship_id;
+    state.ship_id=null; state.lines=[]; renderLines(); $('#saveMsg').innerText='';
+    const printUrl = res.print_url || `${location.origin}/shipment_print.html?ship_id=${encodeURIComponent(sid)}&api=${encodeURIComponent(api())}`;
+    window.open(printUrl,'_blank'); await loadRecents();
+  } else {
+    alert(res.error||'出貨失敗');
+  }
 }
 
 init();
