@@ -3,70 +3,87 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>出貨單列印</title>
+<title>出貨單</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <style>
-body{font-family: 'Noto Sans TC', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:24px;}
-h1{font-size:20px;margin:0 0 8px}
-table{border-collapse:collapse;width:100%;margin-top:12px}
-th,td{border:1px solid #333;padding:6px 8px;font-size:14px}
-th{background:#f2f2f2}
-.header{display:flex;justify-content:space-between;align-items:flex-start}
-.small{font-size:12px;color:#333}
-.print{margin:12px 0}
-@media print {
-  .noprint{display:none}
-  body{margin:8px}
-}
+  body{padding:16px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  @media print { .no-print{ display:none } }
 </style>
 </head>
 <body>
-<div class="noprint print">
-  <button onclick="window.print()">列印</button>
-  <a style="margin-left:8px" href="shipping.html">返回出貨管理</a>
+<div id="err" class="text-danger"></div>
+<div class="no-print mb-3">
+  <button class="btn btn-primary" onclick="window.print()">列印</button>
+  <a class="btn btn-link" href="shipping.html">回出貨管理</a>
 </div>
-<div id="root">讀取中…</div>
+
+<div id="doc" class="container"></div>
 
 <script>
-function qs(key){ return new URL(location.href).searchParams.get(key); }
-const api = qs('api'); const ship_id = qs('ship_id');
+const qs = new URLSearchParams(location.search);
+const ship_id = qs.get('ship_id');
+const api = qs.get('api');
 
-async function main(){
-  if(!api || !ship_id){
-    document.getElementById('root').textContent = '缺少 ship_id 或 API URL';
-    return;
-  }
-  try{
-    const r = await fetch(api+`?action=shipment&ship_id=${encodeURIComponent(ship_id)}`);
-    const j = await r.json();
-    if(!j.ok || !j.data){ throw new Error('找不到出貨單'); }
-    const d = j.data;
-    const h = d.header; const lines = d.lines||[];
-    const sum = d.total||0;
-    const html = [];
-    html.push(`<div class="header"><div>
-      <h1>出貨單</h1>
-      <div class="small">出貨單號：${d.ship_id}</div>
-      <div class="small">出貨日期：${h.date||''}</div>
-    </div>
-    <div class="small">
-      <div>廠商：${h.vendor||''}</div>
-      <div>聯絡：${h.contact||''}　電話：${h.phone||''}</div>
-      <div>地址：${h.address||''}</div>
-    </div></div>`);
-    html.push(`<table><thead><tr><th>#</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>`);
-    lines.forEach((x,i)=>{
-      html.push(`<tr><td>${i+1}</td><td>${x.barcode||''}</td><td>${x.code||''}</td><td>${x.item||''}</td><td>${x.spec||''}</td><td>${x.loc||''}</td><td>${x.exp||''}</td><td>${x.qty_out||x.qty||0}</td><td>${x.unit_price||0}</td><td>${x.amount||((x.qty_out||x.qty||0)*(x.unit_price||0))}</td></tr>`)
-    });
-    html.push(`</tbody><tfoot><tr><th colspan="9" style="text-align:right">合計</th><th>${(+sum).toFixed(2)}</th></tr></tfoot></table>`);
-    html.push(`<div style="margin-top:8px" class="small">備註：${h.note||''}</div>`);
-    document.getElementById('root').innerHTML = html.join('');
-    setTimeout(()=>{ try{ window.print(); }catch(e){} }, 200);
-  }catch(err){
-    document.getElementById('root').textContent = '讀取失敗：'+err;
-  }
+if(!ship_id || !api){
+  document.getElementById('err').textContent = '缺少 ship_id 或 API URL';
+} else {
+  loadDoc();
 }
-main();
+
+async function loadDoc(){
+  const url = new URL(api);
+  url.searchParams.set('mode','ship_doc');
+  url.searchParams.set('ship_id', ship_id);
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if(!r?.ok){ document.getElementById('err').textContent='讀取失敗'; return; }
+  render(r.header, r.lines);
+}
+
+function render(H, L){
+  const el = document.getElementById('doc');
+  const sum = (L||[]).reduce((s,x)=> s + Number(x.amount||0), 0);
+  el.innerHTML = `
+    <div class="row">
+      <div class="col-8"><h4>出貨單</h4></div>
+      <div class="col-4 text-end">
+        <svg id="bc" class="mono"></svg>
+        <div class="mono">${H.ship_id}</div>
+      </div>
+    </div>
+    <table class="table table-bordered table-sm">
+      <tr><th style="width:100px">出貨日期</th><td>${H.date||''}</td><th style="width:100px">客戶</th><td>${H.vendor||''}</td></tr>
+      <tr><th>聯絡人</th><td>${H.contact||''}</td><th>電話</th><td>${H.phone||''}</td></tr>
+      <tr><th>地址</th><td colspan="3">${H.addr||''}</td></tr>
+      <tr><th>備註</th><td colspan="3">${H.note||''}</td></tr>
+    </table>
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm">
+        <thead class="table-light"><tr>
+          <th class="text-center">項次</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th>
+          <th class="text-end">數量</th><th class="text-end">單價</th><th class="text-end">金額</th>
+        </tr></thead>
+        <tbody>
+          ${(L||[]).map((x,i)=>`
+            <tr>
+              <td class="text-center">${i+1}</td>
+              <td class="mono">${x.barcode||''}</td>
+              <td class="mono">${x.code||''}</td>
+              <td>${x.item||''}</td>
+              <td>${x.spec||''}</td>
+              <td class="mono">${x.loc||''}</td>
+              <td>${(x.exp||'').toString().slice(0,10)}</td>
+              <td class="text-end">${x.qty_out||0}</td>
+              <td class="text-end">${Number(x.unit_price||0).toFixed(2)}</td>
+              <td class="text-end">${Number(x.amount||0).toFixed(2)}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="9" class="text-end">合計</td><td class="text-end">${sum.toFixed(2)}</td></tr></tfoot>
+      </table>
+    </div>`;
+  try { JsBarcode("#bc", H.ship_id, {format:"CODE128", height:40}); } catch(e){}
+}
 </script>
 </body>
 </html>
-
