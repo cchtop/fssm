@@ -30,10 +30,12 @@ const $=s=>document.querySelector(s);
 function api(){
   const p = $('#apiUrl').value.trim() || localStorage.getItem('apiUrl') || '';
   if(!p){ alert('請先填 API URL'); throw new Error('no api'); }
+  if($('#apiUrl').value.trim()) localStorage.setItem('apiUrl',$('#apiUrl').value.trim());
   return p;
 }
 async function load(){
-  const id = new URL(location.href).searchParams.get('ship_id');
+  const u = new URL(location.href);
+  const id = u.searchParams.get('ship_id');
   if(!id){ document.body.innerHTML='<p class="text-danger">缺少 ship_id</p>'; return; }
   const r = await fetch(api()+'?'+new URLSearchParams({action:'getshipment', ship_id:id}));
   const j = await r.json(); if(!j.ok){ $('#root').innerHTML='<p class="text-danger">找不到出貨單</p>'; return; }
@@ -47,8 +49,8 @@ async function load(){
     </table>
     <table class="mb-2">
       <thead><tr>
-        <th>序</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th>
-        <th>儲位</th><th>效期</th><th>出貨量</th><th>單價</th><th>金額</th>
+        <th>序</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th>
+        <th>出貨量</th><th>單價</th><th>金額</th>
       </tr></thead>
       <tbody>
         ${lines.map((ln,i)=>`<tr>
@@ -62,9 +64,16 @@ async function load(){
     <p>備註：${h.note||''}</p>
   `;
 }
-$('#apiUrl').value = localStorage.getItem('apiUrl') || '';
-document.getElementById('btnLoad').onclick = load;
-load();
+
+// 初始化：支援 ?api= 帶入
+(function init(){
+  const u = new URL(location.href); const apiParam = u.searchParams.get('api');
+  const saved = localStorage.getItem('apiUrl') || '';
+  if(apiParam){ localStorage.setItem('apiUrl', apiParam); $('#apiUrl').value = apiParam; }
+  else if(saved){ $('#apiUrl').value = saved; }
+  document.getElementById('btnLoad').onclick = load;
+  load();
+})();
 </script>
 </body>
 </html>
