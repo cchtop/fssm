@@ -3,176 +3,279 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>出貨管理</title>
+<title>出貨管理（連動庫存）</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
 <style>
-body{font-family: system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans TC',sans-serif; margin:16px; line-height:1.5;}
-h1{font-size:20px;margin:6px 0 12px}
-fieldset{border:1px solid #ddd;border-radius:8px;margin:12px 0;padding:12px}
-legend{padding:0 6px;color:#333}
-label{display:inline-block;min-width:84px}
-input,select,button{font-size:16px;padding:6px 8px;border:1px solid #c7c7c7;border-radius:6px}
-button{background:#0d6efd;color:#fff;border:none}
-button.secondary{background:#6c757d}
-table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #e5e5e5;padding:6px 8px}
-th{background:#f8f8f8}
-.flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  body{padding:16px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .small-note{font-size:.9rem;color:#666}
 </style>
 </head>
 <body>
-<h1>出貨管理（連動庫存）</h1>
+<h4 class="mb-3">出貨管理（連動庫存）</h4>
 
-<fieldset>
-  <legend>API URL</legend>
-  <div class="flex">
-    <input id="apiUrl" style="min-width:320px" placeholder="貼上 Google Apps Script /exec URL">
-    <button id="btnPing">連線測試</button>
-    <a href="index.html" style="margin-left:auto">回庫存管理</a>
+<div class="mb-3">
+  <label class="form-label">API URL（GAS /exec）</label>
+  <input id="api" class="form-control" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+  <div class="mt-2">
+    <button class="btn btn-outline-primary btn-sm" id="btnTest">連線測試</button>
+    <span id="ping" class="ms-2 small-note"></span>
   </div>
-</fieldset>
-
-<fieldset>
-  <legend>出貨資訊</legend>
-  <div class="flex">
-    <label>出貨日期</label><input id="shipDate" type="date">
-    <label>廠商</label><select id="vendor"></select>
-    <label>聯絡</label><input id="contact" style="width:140px">
-    <label>電話</label><input id="phone" style="width:160px">
-    <label>地址</label><input id="address" style="width:260px">
-  </div>
-  <div class="flex" style="margin-top:8px">
-    <label>備註</label><input id="note" style="width:420px">
-  </div>
-</fieldset>
-
-<fieldset>
-  <legend>新增出貨品項（可用外部掃描器填入條碼後 Enter）</legend>
-  <div class="flex">
-    <label>條碼</label><input id="bc" placeholder="掃描或輸入條碼">
-    <label>料號</label><input id="code" style="width:140px">
-    <label>品項</label><input id="item" style="width:180px">
-    <label>規格</label><input id="spec" style="width:140px">
-    <label>儲位</label><input id="loc" style="width:80px">
-    <label>效期</label><input id="exp" type="date">
-    <label>數量</label><input id="qty" type="number" value="1" style="width:90px">
-    <label>單價</label><input id="price" type="number" value="0" style="width:90px" step="0.01">
-    <button id="addLine">加入清單</button>
-  </div>
-  <small>提示：先掃條碼→自動帶出料號/品項/儲位，必要欄位不足也可直接加入（僅憑料號/數量出貨）。</small>
-</fieldset>
-
-<div style="overflow:auto">
-  <table id="lines">
-    <thead><tr><th>#</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th><th>數量</th><th>單價</th><th>金額</th><th></th></tr></thead>
-    <tbody></tbody>
-    <tfoot><tr><th colspan="9" style="text-align:right">合計</th><th id="sum">0</th><th></th></tr></tfoot>
-  </table>
 </div>
 
-<div class="flex" style="margin-top:8px">
-  <button id="btnSubmit">建立出貨單並扣庫存</button>
-  <div id="result"></div>
+<!-- 出貨表頭 -->
+<div class="card mb-3">
+  <div class="card-header">出貨資訊</div>
+  <div class="card-body row g-2">
+    <div class="col-6 col-md-3">
+      <label class="form-label">出貨日期</label>
+      <input id="sDate" type="date" class="form-control">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">廠商</label>
+      <div class="input-group">
+        <select id="sVendor" class="form-select"></select>
+        <button class="btn btn-outline-secondary" id="btnVendNew">新增</button>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">聯絡人</label>
+      <input id="sContact" class="form-control">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">電話</label>
+      <input id="sPhone" class="form-control">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label">地址</label>
+      <input id="sAddr" class="form-control">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label">備註</label>
+      <input id="sNote" class="form-control">
+    </div>
+  </div>
+</div>
+
+<!-- 明細新增 -->
+<div class="card mb-3">
+  <div class="card-header">新增出貨品項（可用外部掃描器後輸入條碼按 Enter）</div>
+  <div class="card-body row g-2">
+    <div class="col-12">
+      <div class="input-group">
+        <input id="kw" class="form-control mono" placeholder="條碼 / 料號 / 品名關鍵字；輸入後按 Enter">
+        <button class="btn btn-outline-secondary" id="btnExt">用外部掃描器</button>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label">儲位</label>
+      <input id="sLoc" class="form-control mono" placeholder="default">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label">效期</label>
+      <input id="sExp" type="date" class="form-control">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label">數量</label>
+      <input id="sQty" type="number" value="1" class="form-control">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label">單價</label>
+      <input id="sPrice" type="number" value="0" class="form-control">
+    </div>
+    <div class="col-12 col-md-3">
+      <label class="form-label d-block">&nbsp;</label>
+      <button class="btn btn-primary w-100" id="btnAdd">加入清單</button>
+    </div>
+
+    <div class="col-12 mt-3">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped" id="list">
+          <thead class="table-light"><tr>
+            <th>#</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th><th>數量</th><th>單價</th><th>金額</th><th></th>
+          </tr></thead>
+          <tbody></tbody>
+          <tfoot><tr><td colspan="9" class="text-end">合計</td><td id="sum" class="text-end">0</td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <button class="btn btn-success" id="btnCreate">建立出貨單並扣庫存</button>
+      <span id="sMsg" class="ms-2 small-note"></span>
+    </div>
+  </div>
+</div>
+
+<!-- 最近出貨 -->
+<div class="card">
+  <div class="card-header">最近出貨</div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm" id="recent">
+        <thead class="table-light"><tr><th>出貨單號</th><th>日期</th><th>客戶</th><th>金額</th><th>PDF</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script>
-const $=sel=>document.querySelector(sel);
-const api=()=>localStorage.getItem('apiUrl')||'';
-$('#apiUrl').value=api();
-function setApi(v){ localStorage.setItem('apiUrl',v); }
-const state={lines:[]};
+const $ = s => document.querySelector(s);
+const apiInput = $('#api');
+const saveAPI = ()=> localStorage.setItem('fms_api', apiInput.value.trim());
+const loadAPI = ()=> apiInput.value = localStorage.getItem('fms_api') || '';
+loadAPI();
+$('#sDate').value = new Date().toISOString().slice(0,10);
 
-function refreshVendors(){
-  if(!api()) return;
-  fetch(api()+'?action=listvendors').then(r=>r.json()).then(j=>{
-    const sel=$('#vendor'); sel.innerHTML='';
-    const empty = document.createElement('option'); empty.value=''; empty.textContent='-- 請選擇 --'; sel.appendChild(empty);
-    (j.vendors||[]).forEach(v=>{
-      const opt=document.createElement('option');
-      opt.value=v.name; opt.textContent=v.name;
-      opt.dataset.contact=v.contact||''; opt.dataset.phone=v.phone||''; opt.dataset.address=v.address||'';
-      sel.appendChild(opt);
-    });
+$('#btnTest').onclick = async()=>{
+  saveAPI();
+  const r = await fetch(apiInput.value+'?mode=ready').then(r=>r.json()).catch(()=>null);
+  $('#ping').textContent = r?.ok ? '連線成功' : '失敗';
+};
+
+async function loadVendors(){
+  if(!apiInput.value) return;
+  const r = await fetch(apiInput.value+'?mode=vendors').then(r=>r.json()).catch(()=>null);
+  const sel = $('#sVendor'); sel.innerHTML = '';
+  const opt0 = document.createElement('option'); opt0.value=''; opt0.text='(選擇/可空白)'; sel.appendChild(opt0);
+  (r?.vendors||[]).forEach(v=>{
+    const o = document.createElement('option');
+    o.value = v.name; o.text = v.name;
+    o.dataset.contact = v.contact||''; o.dataset.phone = v.phone||''; o.dataset.addr = v.addr||'';
+    sel.appendChild(o);
   });
 }
-$('#vendor').onchange=()=>{
-  const o=$('#vendor').selectedOptions[0];
-  if(!o) return; $('#contact').value=o.dataset.contact||''; $('#phone').value=o.dataset.phone||''; $('#address').value=o.dataset.address||'';
+loadVendors();
+
+$('#sVendor').onchange = ()=>{
+  const o = $('#sVendor').selectedOptions[0];
+  if(!o) return;
+  $('#sContact').value = o.dataset.contact||'';
+  $('#sPhone').value = o.dataset.phone||'';
+  $('#sAddr').value = o.dataset.addr||'';
+};
+$('#btnVendNew').onclick = async()=>{
+  const name = prompt('廠商名稱？'); if(!name) return;
+  const contact = prompt('聯絡人？')||''; const phone = prompt('電話？')||''; const addr = prompt('地址？')||'';
+  const body = { mode:'vendor_upsert', vendor:{ name, contact, phone, addr } };
+  const r = await fetch(apiInput.value, {method:'POST', body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>null);
+  if(r?.ok){ await loadVendors(); $('#sVendor').value=name; $('#sVendor').dispatchEvent(new Event('change')); }
 };
 
-$('#btnPing').onclick=async ()=>{
-  setApi($('#apiUrl').value.trim());
-  try{ const r=await fetch(api()+'?action=ping'); $('#result').textContent=await r.text(); }
-  catch(e){ $('#result').textContent='連線失敗：'+e; }
+// 外部掃碼 Intent
+$('#btnExt').onclick = ()=>{
+  const ret = location.origin + location.pathname + '?barcode={CODE}';
+  location.href = 'zxing://scan/?ret=' + encodeURIComponent(ret);
 };
+// 若網址回來帶 barcode，自動帶入 kw
+const bc = new URLSearchParams(location.search).get('barcode');
+if (bc) $('#kw').value = bc;
 
-$('#bc').addEventListener('keydown', async (e)=>{
-  if(e.key==='Enter' && $('#bc').value.trim()){
-    try{
-      const r = await fetch(api()+`?action=productbybarcode&barcode=${encodeURIComponent($('#bc').value.trim())}`);
-      const j = await r.json();
-      if(j.product){
-        $('#code').value=j.product.code||'';
-        $('#item').value=j.product.item||'';
-        $('#spec').value=j.product.spec||'';
-        $('#loc').value=j.product.default_loc||'';
-      }
-      $('#qty').focus();
-    }catch(err){}
+const list = [];
+function renderList(){
+  const tb = $('#list tbody'); tb.innerHTML = '';
+  let sum=0;
+  list.forEach((x,i)=>{
+    const tr = document.createElement('tr');
+    const amt = Number(x.unit_price||0)*Number(x.qty_out||0);
+    sum += amt;
+    tr.innerHTML = `<td>${i+1}</td>
+      <td class="mono">${x.barcode||''}</td><td class="mono">${x.code||''}</td>
+      <td>${x.item||''}</td><td>${x.spec||''}</td>
+      <td class="mono">${x.loc||''}</td><td>${x.exp||''}</td>
+      <td class="text-end">${x.qty_out||0}</td>
+      <td class="text-end">${x.unit_price||0}</td>
+      <td class="text-end">${amt}</td>
+      <td><button class="btn btn-sm btn-outline-danger" data-i="${i}">刪除</button></td>`;
+    tb.appendChild(tr);
+  });
+  $('#sum').textContent = sum.toFixed(2);
+  tb.querySelectorAll('button[data-i]').forEach(btn=>{
+    btn.onclick = ()=>{ list.splice(Number(btn.dataset.i),1); renderList(); };
+  });
+}
+
+async function lookupProduct(keyword){
+  // 支援 barcode 或 code
+  let url = apiInput.value+'?mode=product';
+  if (/^\d{6,}$/.test(keyword)) url += '&barcode='+encodeURIComponent(keyword);
+  else url += '&code='+encodeURIComponent(keyword);
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  return r?.ok ? r.product : null;
+}
+
+$('#kw').addEventListener('keydown', async(e)=>{
+  if (e.key==='Enter') {
+    $('#btnAdd').click();
   }
 });
 
-function render(){
-  const tb=$('#lines tbody'); tb.innerHTML='';
-  let s=0;
-  state.lines.forEach((ln,i)=>{
-    const tr=document.createElement('tr');
-    const amt=(+ln.qty||0)*(+ln.unit_price||0); s+=amt;
-    tr.innerHTML=`<td>${i+1}</td><td>${ln.barcode||''}</td><td>${ln.code||''}</td><td>${ln.item||''}</td>
-    <td>${ln.spec||''}</td><td>${ln.loc||''}</td><td>${ln.exp||''}</td><td>${ln.qty||0}</td><td>${ln.unit_price||0}</td><td>${amt.toFixed(2)}</td>
-    <td><button data-i="${i}" class="secondary">刪除</button></td>`;
-    tb.appendChild(tr);
-  });
-  $('#sum').textContent=s.toFixed(2);
-  tb.querySelectorAll('button').forEach(b=> b.onclick=()=>{ state.lines.splice(+b.dataset.i,1); render(); });
-}
+$('#btnAdd').onclick = async()=>{
+  saveAPI();
+  const kw = $('#kw').value.trim();
+  if(!kw){ alert('請輸入條碼/料號/關鍵字'); return; }
+  const p = await lookupProduct(kw);
+  if(!p){ alert('找不到產品'); return; }
 
-$('#addLine').onclick=()=>{
-  const ln={
-    barcode: $('#bc').value.trim(), code: $('#code').value.trim(), item: $('#item').value.trim(), spec: $('#spec').value.trim(),
-    loc: $('#loc').value.trim(), exp: $('#exp').value, qty: +($('#qty').value||0), unit_price: +($('#price').value||0)
+  const line = {
+    barcode: p.barcode || kw,
+    code: p.code || kw,
+    item: p.item || '',
+    spec: p.spec || '',
+    loc: $('#sLoc').value || p.default_loc || '',
+    exp: $('#sExp').value || '',
+    qty_out: Number($('#sQty').value||0),
+    unit_price: Number($('#sPrice').value||0)
   };
-  if(!(ln.code||ln.barcode) || ln.qty<=0){ alert('請至少輸入「料號或條碼」及「數量」'); return; }
-  state.lines.push(ln);
-  ['bc','code','item','spec','loc','exp','qty','price'].forEach(id=> $('#'+id).value = id==='qty'?1:'');
-  render();
+  list.push(line);
+  renderList();
+  // 清空輸入
+  $('#kw').value=''; $('#sQty').value=1; $('#sPrice').value=0;
 };
 
-$('#btnSubmit').onclick=async ()=>{
-  if(!api()){ alert('請先設定 API URL'); return; }
-  if(!state.lines.length){ alert('請加入至少一個品項'); return; }
-  const header={
-    date: $('#shipDate').value,
-    vendor: $('#vendor').value, contact: $('#contact').value, phone: $('#phone').value, address: $('#address').value,
-    note: $('#note').value
+$('#btnCreate').onclick = async()=>{
+  saveAPI();
+  if (!list.length){ alert('明細為空'); return; }
+  const header = {
+    date: $('#sDate').value,
+    vendor: $('#sVendor').value,
+    contact: $('#sContact').value,
+    phone: $('#sPhone').value,
+    addr: $('#sAddr').value,
+    note: $('#sNote').value
   };
-  try{
-    const r = await fetch(api(), {method:'POST', body: JSON.stringify({action:'createShipment', header, lines: state.lines})});
-    const j = await r.json();
-    if(j.ok){
-      const sid = j.ship_id;
-      $('#result').innerHTML = `✅ 已建立出貨單：<b>${sid}</b>　金額合計 ${j.total.toFixed(2)}　
-      <a target="_blank" href="shipment_print.html?ship_id=${encodeURIComponent(sid)}&api=${encodeURIComponent(api())}">列印</a>`;
-      state.lines = []; render();
-    }else{
-      $('#result').textContent = '❌ 失敗：'+j.error;
-    }
-  }catch(err){
-    $('#result').textContent = '❌ 發送失敗：'+err;
+  $('#sMsg').textContent = '處理中…';
+  const r = await fetch(apiInput.value, {method:'POST', body:JSON.stringify({mode:'ship', header, lines:list})})
+                  .then(r=>r.json()).catch(e=>({ok:false,msg:String(e)}));
+  if (r.ok) {
+    $('#sMsg').textContent = `完成，出貨單號：${r.ship_id}`;
+    // 開啟列印頁
+    const url = `shipment_print.html?ship_id=${encodeURIComponent(r.ship_id)}&api=${encodeURIComponent(apiInput.value)}`;
+    window.open(url, '_blank');
+    // 重新載入最近出貨
+    loadRecent();
+    // 清空當前清單
+    list.length = 0; renderList();
+  } else {
+    $('#sMsg').textContent = '失敗：'+(r.msg||'');
   }
 };
 
-const t=new Date(); $('#shipDate').value=t.toISOString().slice(0,10);
-refreshVendors();
+async function loadRecent(){
+  if(!apiInput.value) return;
+  const r = await fetch(apiInput.value+'?mode=ship_list&limit=20').then(r=>r.json()).catch(()=>null);
+  const tb = $('#recent tbody'); tb.innerHTML='';
+  (r?.rows||[]).forEach(h=>{
+    const tr = document.createElement('tr');
+    const link = `shipment_print.html?ship_id=${encodeURIComponent(h.ship_id)}&api=${encodeURIComponent(apiInput.value)}`;
+    tr.innerHTML = `<td class="mono">${h.ship_id}</td><td>${h.date||''}</td><td>${h.vendor||''}</td>
+      <td class="text-end">${Number(h.amount||0).toFixed(2)}</td>
+      <td><a href="${link}" target="_blank">列印</a></td>`;
+    tb.appendChild(tr);
+  });
+}
+loadRecent();
 </script>
 </body>
 </html>
