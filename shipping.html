@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>出貨管理</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<style>.mono{font-family:ui-monospace,Menlo,Consolas,monospace}</style>
+</head>
+<body class="container">
+
+<div class="mb-3">
+  <label class="form-label">API URL（GAS /exec）</label>
+  <input id="apiUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycbyCFJNSizgj8E9n3DAdGTygeD5Lj5sT-30GpmUG9xO1ZXiso9bSNxTjNrh4SWtJo0BJ/exec">
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">出貨表頭</div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><label class="form-label">出貨日期</label><input id="shipDate" type="date" class="form-control"></div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">客戶（供應商）</label>
+        <div class="d-flex gap-2">
+          <select id="vendorSel" class="form-select"></select>
+          <button id="btnNewVendor" class="btn btn-outline-secondary" type="button">新增</button>
+        </div>
+      </div>
+      <div class="col-6 col-md-3"><label class="form-label">聯絡人</label><input id="contact" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">電話</label><input id="phone" class="form-control"></div>
+      <div class="col-12"><label class="form-label">地址</label><input id="address" class="form-control"></div>
+      <div class="col-12"><label class="form-label">備註</label><input id="note" class="form-control"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">新增明細</div>
+  <div class="card-body">
+    <div class="d-flex gap-2 align-items-end flex-wrap">
+      <div class="flex-grow-1">
+        <label class="form-label">條碼 / 料號 / 品名關鍵字</label>
+        <input id="searchKey" class="form-control" placeholder="輸入後按 Enter 或用外部掃描器">
+      </div>
+      <a id="btnScan" class="btn btn-outline-secondary" href="#">用外部掃描器</a>
+      <div><label class="form-label">儲位</label><input id="lineLoc" class="form-control" style="width:100px"></div>
+      <div><label class="form-label">效期</label><input id="lineExp" type="date" class="form-control" style="width:140px"></div>
+      <div><label class="form-label">出貨量</label><input id="lineQty" type="number" value="1" class="form-control" style="width:100px"></div>
+      <div><label class="form-label">單價</label><input id="linePrice" type="number" value="0" class="form-control" style="width:100px"></div>
+      <button id="btnAdd" class="btn btn-primary" type="button">加入</button>
+    </div>
+
+    <div class="table-responsive mt-3">
+      <table class="table table-sm table-bordered">
+        <thead class="table-light">
+          <tr>
+            <th style="width:40px">#</th><th style="width:140px">條碼</th><th style="width:110px">料號</th>
+            <th>品項</th><th style="width:120px">規格</th><th style="width:80px">儲位</th><th style="width:120px">效期</th>
+            <th style="width:90px">出貨</th><th style="width:100px">單價</th><th style="width:110px">金額</th><th style="width:70px"></th>
+          </tr>
+        </thead>
+        <tbody id="lineBody"></tbody>
+      </table>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary" id="btnSaveDraft">儲存草稿</button>
+      <button class="btn btn-success" id="btnCommit">確定出貨（扣庫存 & 產生印單）</button>
+      <div id="saveMsg" class="ms-2 align-self-center text-muted"></div>
+    </div>
+  </div>
+</div>
+
+<h5>最近出貨</h5>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead class="table-light"><tr><th>出貨單號</th><th>日期</th><th>客戶</th><th>狀態</th><th>PDF</th></tr></thead>
+    <tbody id="recents"></tbody>
+  </table>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { lines:[], ship_id:null, vendors:[], productsCache:{} };
+function api(){ const u=$('#apiUrl').value.trim(); if(!u){ alert('請先貼上 API URL'); throw new Error('no api'); } return u; }
+function todayStr(){ const d=new Date(),z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+async function GET(p){ const r=await fetch(api()+'?'+new URLSearchParams(p)); return r.json(); }
+async function POST(obj){ const r=await fetch(api(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}); return r.json(); }
+
+async function init(){
+  // 記住 API
+  $('#apiUrl').value = localStorage.getItem('apiUrl') || '';
+  $('#apiUrl').addEventListener('change', ()=> localStorage.setItem('apiUrl', $('#apiUrl').value));
+  $('#shipDate').value = todayStr();
+
+  // 外部掃描器（掃完回 /shipping.html?q=條碼）
+  const ret = encodeURIComponent(`${location.origin}${location.pathname}?q={CODE}`);
+  $('#btnScan').href = `zxing://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,CODE_128,ITF`;
+
+  // 若有 ?q= 直接帶入
+  const q = new URL(location.href).searchParams.get('q'); if(q){ $('#searchKey').value=q; lookupAndPrefill(); history.replaceState({},'',location.pathname); }
+
+  $('#searchKey').addEventListener('keydown', e=>{ if(e.key==='Enter'){ lookupAndPrefill(); }});
+  $('#btnAdd').onclick = addLine;
+  $('#btnSaveDraft').onclick = saveDraft;
+  $('#btnCommit').onclick = commitShipment;
+  $('#btnNewVendor').onclick = async ()=>{
+    const name = prompt('輸入新客戶/供應商名稱'); if(!name) return;
+    const v = await POST({action:'savevendor', vendor:{ name }});
+    await loadVendors(v.vendor_id);
+  };
+
+  await loadVendors();
+  await loadRecents();
+}
+async function loadVendors(selected){
+  const res = await GET({action:'listvendors'});
+  const list = res.rows || []; state.vendors = list;
+  $('#vendorSel').innerHTML = `<option value="">（選擇/可空白）</option>` + list.map(v=>`<option value="${v.vendor_id}">${v.name}</option>`).join('');
+  if(selected) $('#vendorSel').value=selected;
+  $('#vendorSel').onchange = ()=>{
+    const v = state.vendors.find(x=>x.vendor_id===$('#vendorSel').value);
+    $('#contact').value = v?.contact||''; $('#phone').value=v?.phone||''; $('#address').value=v?.address||'';
+  };
+}
+async function loadRecents(){
+  const res = await GET({action:'listshipments'}); const rows=(res.rows||[]).slice(-10).reverse();
+  $('#recents').innerHTML = rows.map(r=>`<tr>
+    <td class="mono">${r.ship_id}</td><td>${r.date}</td><td>${r.vendor_name||''}</td><td>${r.status}</td>
+    <td>${r.pdf_url?`<a target="_blank" href="${r.pdf_url}">開啟</a>`:''}</td>
+  </tr>`).join('');
+}
+
+async function lookupAndPrefill(){
+  const key = $('#searchKey').value.trim(); if(!key) return;
+  const res = await GET({action:'products', q:key}); const list = res.rows||[];
+  if(!list.length){ alert('找不到商品'); return; }
+  const p = list[0]; state.productsCache[p.code]=p;
+  $('#lineLoc').value = p.default_loc||''; // 預設儲位
+  $('#searchKey').dataset.code = p.code; $('#searchKey').dataset.barcode = p.barcode||'';
+  $('#searchKey').dataset.item = p.item||''; $('#searchKey').dataset.spec = p.spec||'';
+}
+
+function addLine(){
+  const code = $('#searchKey').dataset.code; if(!code){ alert('請先輸入條碼/料號/關鍵字並按 Enter'); return; }
+  const line = {
+    barcode: $('#searchKey').dataset.barcode||'',
+    code, item: $('#searchKey').dataset.item||'', spec: $('#searchKey').dataset.spec||'',
+    loc: $('#lineLoc').value||'', exp: $('#lineExp').value||'',
+    qty_out: +($('#lineQty').value||0), unit_price: +($('#linePrice').value||0)
+  };
+  line.amount = line.qty_out * line.unit_price;
+  state.lines.push(line); renderLines();
+  // 清空
+  $('#searchKey').value=''; $('#searchKey').dataset.code=''; $('#lineExp').value=''; $('#lineQty').value=1; $('#linePrice').value=0;
+}
+function renderLines(){
+  $('#lineBody').innerHTML = state.lines.map((ln,i)=>`
+    <tr>
+      <td>${i+1}</td><td class="mono">${ln.barcode||''}</td><td class="mono">${ln.code}</td><td>${ln.item}</td>
+      <td>${ln.spec||''}</td><td>${ln.loc||''}</td><td>${ln.exp||''}</td>
+      <td class="mono">${ln.qty_out}</td><td class="mono">${ln.unit_price}</td><td class="mono">${ln.amount}</td>
+      <td><button class="btn btn-sm btn-outline-danger" onclick="delLine(${i})">刪</button></td>
+    </tr>`).join('');
+}
+function delLine(i){ state.lines.splice(i,1); renderLines(); }
+
+function header(){
+  const v = state.vendors.find(x=>x.vendor_id===$('#vendorSel').value);
+  return { date: $('#shipDate').value||todayStr(), vendor_id:v?.vendor_id||'', vendor_name:v?.name||'',
+           contact:$('#contact').value, phone:$('#phone').value, address:$('#address').value, note:$('#note').value };
+}
+async function saveDraft(){
+  if(!state.lines.length){ alert('請先加入至少一筆明細'); return; }
+  const res = await POST({action:'createshipment', header:header(), lines:state.lines});
+  if(res.ok){ state.ship_id=res.ship_id; $('#saveMsg').innerText = `草稿已儲存：${res.ship_id}`; await loadRecents(); }
+  else alert(res.error||'儲存失敗');
+}
+async function commitShipment(){
+  if(!state.ship_id){ await saveDraft(); if(!state.ship_id) return; }
+  const res = await POST({action:'commitshipment', ship_id:state.ship_id});
+  if(res.ok){
+    alert('出貨完成，庫存已扣。'); state.ship_id=null; state.lines=[]; renderLines(); $('#saveMsg').innerText='';
+    // 開啟印單網址（後端回傳 print_url；若沒給就用本機）
+    const url = res.print_url || `${location.origin}/shipment_print.html?ship_id=${encodeURIComponent(res.ship_id)}`;
+    window.open(url, '_blank'); await loadRecents();
+  } else alert(res.error||'出貨失敗');
+}
+
+init();
+</script>
+</body>
+</html>
