@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>原物料管理（倉儲）</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+<style>
+  body{padding:1rem}
+  .table-responsive{max-height:48vh;overflow-y:auto}
+  video{width:100%;max-width:420px;border:1px solid #ddd;border-radius:8px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+</style>
+</head>
+<body class="container">
+
+<!-- API URL -->
+<div class="mb-3">
+  <label class="form-label">API URL（GAS /exec）</label>
+  <input id="apiUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycbyCFJNSizgj8E9n3DAdGTygeD5Lj5sT-30GpmUG9xO1ZXiso9bSNxTjNrh4SWtJo0BJ/exec">
+  <div class="form-text">會儲存在本機瀏覽器（兩頁共用）。</div>
+</div>
+
+<!-- 掃碼 -->
+<div class="card mb-3">
+  <div class="card-header">掃碼新增（條碼/QR）</div>
+  <div class="card-body">
+    <div class="d-flex gap-2 align-items-end flex-wrap">
+      <div>
+        <label class="form-label">相機</label>
+        <select id="camSelect" class="form-select" style="min-width:220px"></select>
+      </div>
+      <button id="btnScanStart" class="btn btn-primary" type="button">啟動掃描</button>
+      <button id="btnScanStop"  class="btn btn-outline-secondary" type="button">停止</button>
+
+      <!-- 外部掃描器（手機條碼 App） -->
+      <a id="extZX"     class="btn btn-outline-secondary" href="#">用外部掃描器</a>
+      <input id="fileScan" type="file" accept="image/*" capture="environment" class="d-none">
+      <span id="scanMsg" class="text-danger small ms-2"></span>
+    </div>
+    <video id="video" playsinline muted></video>
+  </div>
+</div>
+
+<!-- 新增 / 更新 -->
+<div class="card">
+  <div class="card-header">單筆新增/更新</div>
+  <div class="card-body">
+    <form id="matForm" class="row g-2">
+      <div class="col-6 col-md-3"><label class="form-label">日期</label><input id="matDate" type="date" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">條碼</label><input id="matBarcode" class="form-control" placeholder="可掃描自動帶入"></div>
+      <div class="col-6 col-md-3"><label class="form-label">料號</label><input id="matCode" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">品項</label><input id="matItem" class="form-control"></div>
+      <div class="col-6 col-md-2"><label class="form-label">儲位</label><input id="matLoc" class="form-control"></div>
+      <div class="col-6 col-md-2"><label class="form-label">效期</label><input id="matExp" type="date" class="form-control"></div>
+      <div class="col-6 col-md-2"><label class="form-label">進料量(+)</label><input id="matIn" type="number" step="1" class="form-control" value="0"></div>
+      <div class="col-6 col-md-2"><label class="form-label">領料量(-)</label><input id="matOut" type="number" step="1" class="form-control" value="0"></div>
+      <div class="col-12"><button class="btn btn-primary">新增 / 更新</button><span id="saveMsg" class="ms-2 text-muted"></span></div>
+    </form>
+    <div class="table-responsive mt-3">
+      <table id="matTable" class="table table-sm table-bordered">
+        <thead class="table-light"><tr><th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>進</th><th>出</th><th>庫存</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 線上查詢 -->
+<div class="card my-3">
+  <div class="card-header">線上查詢（Google Sheet）</div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><label class="form-label">日期自</label><input id="qFrom" type="date" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">日期至</label><input id="qTo" type="date" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">料號含</label><input id="qCode" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">品項含</label><input id="qItem" class="form-control"></div>
+      <div class="col-6 col-md-3"><label class="form-label">儲位含</label><input id="qLoc" class="form-control"></div>
+    </div>
+    <div class="mt-2">
+      <button id="btnQuery" class="btn btn-outline-primary">查詢</button>
+      <button id="btnSummary" class="btn btn-outline-secondary">彙總</button>
+    </div>
+    <div class="table-responsive mt-2">
+      <table id="qTable" class="table table-sm table-bordered">
+        <thead class="table-light"><tr><th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>進</th><th>出</th><th>庫存</th><th>寫入時間</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 預警 -->
+<div class="card my-3">
+  <div class="card-header">預警檢查</div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><label class="form-label">到期天數內</label><input id="warnExpDays" type="number" class="form-control" value="30"></div>
+      <div class="col-6 col-md-3"><label class="form-label">近N日均耗用</label><input id="warnLookback" type="number" class="form-control" value="60"></div>
+    </div>
+    <div class="mt-2"><button id="btnAlerts" class="btn btn-outline-danger">檢查預警</button></div>
+    <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th colspan="6">到期預警</th></tr><tr><th>品項</th><th>料號</th><th>儲位</th><th>效期</th><th>剩餘量</th><th>天數</th></tr></thead><tbody id="expBody"></tbody></table></div>
+    <div class="table-responsive mt-3"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th colspan="8">低庫存預警</th></tr><tr><th>品項</th><th>料號</th><th>儲位</th><th>現庫存</th><th>近N日日均耗用</th><th>補貨點</th><th>覆蓋天數</th><th>建議下單</th></tr></thead><tbody id="lowBody"></tbody></table></div>
+  </div>
+</div>
+
+<script>
+/* API URL 管理 */
+const apiInput = document.getElementById('apiUrl');
+apiInput.value = localStorage.getItem('apiUrl') || '';
+apiInput.addEventListener('change', ()=> localStorage.setItem('apiUrl', apiInput.value));
+function api(){ const u = apiInput.value.trim(); if(!u){ alert('請先在上方貼上 API URL'); throw new Error('no api'); } return u; }
+
+/* 外部掃描器：掃完回這頁 ?barcode=XXXXX */
+(function(){
+  const u = new URL(location.href); const bc = u.searchParams.get('barcode');
+  if (bc){ document.getElementById('matBarcode').value = bc; lookupByBarcode(bc); history.replaceState({},'',location.pathname); }
+  const ret = encodeURIComponent(`${location.origin}${location.pathname}?barcode={CODE}`);
+  document.getElementById('extZX').href = `zxing://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,CODE_128,ITF`;
+})();
+
+/* 主檔帶入（條碼或料號） */
+let lookupTimer=null;
+async function lookupByBarcode(barcode){
+  if(!barcode) return;
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(async ()=>{
+    const r = await fetch(`${api()}?action=lookup&barcode=${encodeURIComponent(barcode)}`);
+    const j = await r.json();
+    if (j && j.found){
+      if (j.row.code)  matCode.value = j.row.code;
+      if (j.row.item)  matItem.value = j.row.item;
+      if (j.row.default_loc) matLoc.value = j.row.default_loc;
+    }
+  }, 200);
+}
+
+/* ZXing 相機（簡化版） */
+const video=document.getElementById('video'), camSel=document.getElementById('camSelect');
+const btnStart=document.getElementById('btnScanStart'), btnStop=document.getElementById('btnScanStop');
+let codeReader=null, stream;
+async function listCams(){
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d=>d.kind==='videoinput');
+  camSel.innerHTML = cams.map(c=>`<option value="${c.deviceId}">${c.label||'Camera'}</option>`).join('');
+}
+btnStart.onclick = async ()=>{
+  codeReader = new ZXing.BrowserMultiFormatReader();
+  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  video.srcObject = stream; await video.play();
+  codeReader.decodeFromVideoDevice(null, video, (res)=>{
+    if(res){ const code = res.getText(); document.getElementById('matBarcode').value = code; lookupByBarcode(code); }
+  });
+};
+btnStop.onclick = ()=>{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } if(codeReader){ codeReader.reset(); } };
+
+/* 畫面暫存表 */
+const tbody=document.querySelector('#matTable tbody'); let data=[];
+function renderLocal(){
+  tbody.innerHTML=''; data.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+    tbody.insertAdjacentHTML('beforeend', `<tr><td>${r.date}</td><td>${r.barcode||''}</td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stock||0}</td></tr>`);
+  });
+}
+
+/* 表單送出 */
+document.getElementById('matForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const d=matDate.value, bc=(matBarcode.value||'').trim(), code=matCode.value.trim(), it=matItem.value.trim(), loc=matLoc.value.trim(), exp=(matExp.value||'').trim();
+  const qIn=+matIn.value||0, qOut=+matOut.value||0;
+  const stock = data.filter(r=>r.date===d && r.code===code && r.item===it && r.loc===loc).reduce((a,c)=>a+c.in-c.out,0) + qIn - qOut;
+  const ex = data.find(r=>r.date===d && r.code===code && r.item===it && r.loc===loc);
+  if (ex){ ex.in+=qIn; ex.out+=qOut; ex.stock=stock; } else { data.push({date:d, barcode:bc, code, item:it, loc, in:qIn, out:qOut, stock}); }
+  renderLocal();
+
+  try{
+    const r = await fetch(api(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({date:d, barcode:bc, code, item:it, loc, exp, in:qIn, out:qOut})});
+    const j = await r.json();
+    if (j && j.ok){
+      if (j.fill?.code) matCode.value = j.fill.code;
+      if (j.fill?.item) matItem.value = j.fill.item;
+      if (j.fill?.loc)  matLoc.value  = j.fill.loc;
+      const last = data.find(r=>r.date===d && r.code===(j.fill?.code||code) && r.item===(j.fill?.item||it) && r.loc===(j.fill?.loc||loc));
+      if (last) last.stock = j.onhand;
+      renderLocal();
+      saveMsg.textContent = `已寫入。現庫存：${j.onhand}`;
+      setTimeout(()=>saveMsg.textContent='', 2000);
+    }else{ saveMsg.textContent = '寫入失敗：'+(j?.error||''); }
+  }catch(err){ saveMsg.textContent = '寫入失敗：'+err; }
+
+  e.target.reset(); matDate.value = new Date().toISOString().slice(0,10);
+});
+
+/* 查詢/彙總/預警 */
+const qBody=document.querySelector('#qTable tbody');
+document.getElementById('btnQuery').onclick = async ()=>{
+  const qs = new URLSearchParams({action:'query', from:qFrom.value||'', to:qTo.value||'', code:qCode.value||'', item:qItem.value||'', loc:qLoc.value||''});
+  try{ const r=await fetch(`${api()}?${qs}`); const j=await r.json();
+    qBody.innerHTML=''; (j.rows||[]).forEach(r=>{
+      qBody.insertAdjacentHTML('beforeend', `<tr><td>${r.date||''}</td><td>${r.barcode||''}</td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stock||0}</td><td>${r.timestamp||r.ts||''}</td></tr>`);
+    });
+    if(!(j.rows||[]).length) qBody.innerHTML = `<tr><td colspan="9" class="text-muted">無資料</td></tr>`;
+  }catch(e){ qBody.innerHTML = `<tr><td colspan="9" class="text-danger">查詢失敗：${e}</td></tr>`; }
+};
+document.getElementById('btnSummary').onclick = async ()=>{
+  const qs = new URLSearchParams({action:'summary', from:qFrom.value||'', to:qTo.value||'', code:qCode.value||'', item:qItem.value||'', loc:qLoc.value||''});
+  const r=await fetch(`${api()}?${qs}`); const j=await r.json();
+  qBody.innerHTML=''; (j.rows||[]).forEach(r=>{
+    qBody.insertAdjacentHTML('beforeend', `<tr><td>${r.date||''}</td><td></td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stockEnd||0}</td><td></td></tr>`);
+  });
+};
+document.getElementById('btnAlerts').onclick = async ()=>{
+  try{
+    const r=await fetch(`${api()}?action=alerts&expWithinDays=${+warnExpDays.value||30}&lookbackDays=${+warnLookback.value||60}`); const j=await r.json();
+    expBody.innerHTML=''; (j.expiry||[]).forEach(x=> expBody.insertAdjacentHTML('beforeend', `<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc||''}</td><td>${x.exp}</td><td>${x.qty}</td><td>${x.days_left}</td></tr>`));
+    if(!j.expiry?.length) expBody.innerHTML=`<tr><td colspan="6" class="text-muted">無到期預警</td></tr>`;
+    lowBody.innerHTML=''; (j.lowStock||[]).forEach(x=> lowBody.insertAdjacentHTML('beforeend', `<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc||''}</td><td>${x.onhand}</td><td>${x.avg_daily}</td><td>${x.reorder_point}</td><td>${x.days_cover}</td><td>${x.suggest_order}</td></tr>`));
+    if(!j.lowStock?.length) lowBody.innerHTML=`<tr><td colspan="8" class="text-muted">無低庫存預警</td></tr>`;
+  }catch(e){ expBody.innerHTML=`<tr><td colspan="6" class="text-danger">預警查詢失敗：${e}</td></tr>`; lowBody.innerHTML=''; }
+};
+
+/* 初始 */
+(function(){ const t=new Date().toISOString().slice(0,10); matDate.value=t; qFrom.value=t; qTo.value=t; listCams(); })();
+</script>
+</body>
+</html>
