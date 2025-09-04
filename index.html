@@ -1,237 +1,211 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>原物料管理（倉儲）</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>線上倉儲管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  body{padding:1rem}
-  .table-responsive{max-height:48vh;overflow-y:auto}
-  video{width:100%;max-width:420px;border:1px solid #ddd;border-radius:8px}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+body{font-family: system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans TC',sans-serif; margin:16px; line-height:1.5;}
+h1{font-size:20px;margin:6px 0 12px}
+fieldset{border:1px solid #ddd;border-radius:8px;margin:12px 0;padding:12px}
+legend{padding:0 6px;color:#333}
+label{display:inline-block;min-width:72px}
+input,select,button{font-size:16px;padding:6px 8px;border:1px solid #c7c7c7;border-radius:6px}
+button{background:#0d6efd;color:#fff;border:none}
+button.secondary{background:#6c757d}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #e5e5e5;padding:6px 8px;font-size:14px}
+th{background:#f7f7f7}
+small.muted{color:#666}
+.flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type="date"]{min-width:140px}
+.kv{display:grid;grid-template-columns:100px 1fr;gap:6px 8px;align-items:center}
+.bad{color:#b00020}
+.good{color:#0a7}
+#log{min-height:64px;width:100%;border:1px dashed #ddd;white-space:pre-wrap}
 </style>
 </head>
-<body class="container">
+<body>
+<h1>線上倉儲管理</h1>
 
-<!-- API URL -->
-<div class="mb-3">
-  <label class="form-label">API URL（GAS /exec）</label>
-  <input id="apiUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycbyCFJNSizgj8E9n3DAdGTygeD5Lj5sT-30GpmUG9xO1ZXiso9bSNxTjNrh4SWtJo0BJ/exec">
-  <div class="form-text">會儲存在本機瀏覽器（兩頁共用）。</div>
-</div>
-
-<!-- 掃碼 -->
-<div class="card mb-3">
-  <div class="card-header">掃碼新增（條碼/QR）</div>
-  <div class="card-body">
-    <div class="d-flex gap-2 align-items-end flex-wrap">
-      <div>
-        <label class="form-label">相機</label>
-        <select id="camSelect" class="form-select" style="min-width:220px"></select>
-      </div>
-      <button id="btnScanStart" class="btn btn-primary" type="button">啟動掃描</button>
-      <button id="btnScanStop"  class="btn btn-outline-secondary" type="button">停止</button>
-
-      <!-- 外部掃描器（手機條碼 App） -->
-      <a id="extZX"     class="btn btn-outline-secondary" href="#">用外部掃描器</a>
-      <input id="fileScan" type="file" accept="image/*" capture="environment" class="d-none">
-      <span id="scanMsg" class="text-danger small ms-2"></span>
-    </div>
-    <video id="video" playsinline muted></video>
+<fieldset>
+  <legend>API URL（GAS /exec）</legend>
+  <div class="flex">
+    <input id="apiUrl" style="min-width:320px" placeholder="貼上 Google Apps Script 部署的 /exec URL">
+    <button id="btnPing">連線測試</button>
+    <small class="muted">會儲存在瀏覽器，不會上傳。</small>
   </div>
-</div>
+</fieldset>
 
-<!-- 新增 / 更新 -->
-<div class="card">
-  <div class="card-header">單筆新增/更新</div>
-  <div class="card-body">
-    <form id="matForm" class="row g-2">
-      <div class="col-6 col-md-3"><label class="form-label">日期</label><input id="matDate" type="date" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">條碼</label><input id="matBarcode" class="form-control" placeholder="可掃描自動帶入"></div>
-      <div class="col-6 col-md-3"><label class="form-label">料號</label><input id="matCode" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">品項</label><input id="matItem" class="form-control"></div>
-      <div class="col-6 col-md-2"><label class="form-label">儲位</label><input id="matLoc" class="form-control"></div>
-      <div class="col-6 col-md-2"><label class="form-label">效期</label><input id="matExp" type="date" class="form-control"></div>
-      <div class="col-6 col-md-2"><label class="form-label">進料量(+)</label><input id="matIn" type="number" step="1" class="form-control" value="0"></div>
-      <div class="col-6 col-md-2"><label class="form-label">領料量(-)</label><input id="matOut" type="number" step="1" class="form-control" value="0"></div>
-      <div class="col-12"><button class="btn btn-primary">新增 / 更新</button><span id="saveMsg" class="ms-2 text-muted"></span></div>
-    </form>
-    <div class="table-responsive mt-3">
-      <table id="matTable" class="table table-sm table-bordered">
-        <thead class="table-light"><tr><th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>進</th><th>出</th><th>庫存</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+<fieldset>
+  <legend>單筆新增 / 更新</legend>
+  <div class="flex">
+    <label>日期</label><input id="txDate" type="date">
+    <label>條碼</label><input id="txBarcode" placeholder="掃描或輸入後 Enter">
+    <label>料號</label><input id="txCode" style="width:140px">
+    <label>品項</label><input id="txItem" style="width:160px">
+    <label>儲位</label><input id="txLoc" style="width:80px">
   </div>
-</div>
+  <div class="flex" style="margin-top:8px">
+    <label>效期</label><input id="txExp" type="date">
+    <label>進(+)</label><input id="txIn" type="number" value="0" style="width:90px">
+    <label>出(-)</label><input id="txOut" type="number" value="0" style="width:90px">
+    <button id="btnSave">新增 / 更新</button>
+    <span id="saveMsg"></span>
+  </div>
+  <div id="log" class="muted"></div>
+</fieldset>
 
-<!-- 線上查詢 -->
-<div class="card my-3">
-  <div class="card-header">線上查詢（Google Sheet）</div>
-  <div class="card-body">
-    <div class="row g-2">
-      <div class="col-6 col-md-3"><label class="form-label">日期自</label><input id="qFrom" type="date" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">日期至</label><input id="qTo" type="date" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">料號含</label><input id="qCode" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">品項含</label><input id="qItem" class="form-control"></div>
-      <div class="col-6 col-md-3"><label class="form-label">儲位含</label><input id="qLoc" class="form-control"></div>
-    </div>
-    <div class="mt-2">
-      <button id="btnQuery" class="btn btn-outline-primary">查詢</button>
-      <button id="btnSummary" class="btn btn-outline-secondary">彙總</button>
-    </div>
-    <div class="table-responsive mt-2">
-      <table id="qTable" class="table table-sm table-bordered">
-        <thead class="table-light"><tr><th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>進</th><th>出</th><th>庫存</th><th>寫入時間</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+<fieldset>
+  <legend>線上查詢（Google Sheet）</legend>
+  <div class="flex">
+    <label>日期自</label><input id="qFrom" type="date">
+    <label>日期至</label><input id="qTo" type="date">
+    <label>料號含</label><input id="qCodeLike">
+    <label>品項含</label><input id="qItemLike">
+    <label>儲位含</label><input id="qLocLike">
+    <button id="btnQuery" class="secondary">查詢</button>
   </div>
-</div>
+  <div style="overflow:auto;margin-top:8px">
+    <table id="tbl">
+      <thead><tr>
+        <th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>效期</th>
+        <th>進</th><th>出</th><th>庫存</th><th>寫入時間</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</fieldset>
 
-<!-- 預警 -->
-<div class="card my-3">
-  <div class="card-header">預警檢查</div>
-  <div class="card-body">
-    <div class="row g-2">
-      <div class="col-6 col-md-3"><label class="form-label">到期天數內</label><input id="warnExpDays" type="number" class="form-control" value="30"></div>
-      <div class="col-6 col-md-3"><label class="form-label">近N日均耗用</label><input id="warnLookback" type="number" class="form-control" value="60"></div>
-    </div>
-    <div class="mt-2"><button id="btnAlerts" class="btn btn-outline-danger">檢查預警</button></div>
-    <div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th colspan="6">到期預警</th></tr><tr><th>品項</th><th>料號</th><th>儲位</th><th>效期</th><th>剩餘量</th><th>天數</th></tr></thead><tbody id="expBody"></tbody></table></div>
-    <div class="table-responsive mt-3"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th colspan="8">低庫存預警</th></tr><tr><th>品項</th><th>料號</th><th>儲位</th><th>現庫存</th><th>近N日日均耗用</th><th>補貨點</th><th>覆蓋天數</th><th>建議下單</th></tr></thead><tbody id="lowBody"></tbody></table></div>
+<fieldset>
+  <legend>預警檢查</legend>
+  <div class="flex">
+    <label>到期天數內</label><input id="warnExp" type="number" value="30" style="width:90px">
+    <label>近期平均用量(天)</label><input id="warnLookback" type="number" value="60" style="width:90px">
+    <button id="btnWarn" class="secondary">檢查預警</button>
   </div>
+  <div id="warnOut"></div>
+</fieldset>
+
+<div style="margin-top:16px">
+  <a href="shipping.html">➡ 前往出貨管理</a>
 </div>
 
 <script>
-/* API URL 管理 */
-// 共用 API 讀取：先用 input，其次 localStorage
-function api(){
-  const el = document.querySelector('#apiUrl');
-  const u = (el && el.value.trim()) || localStorage.getItem('apiUrl') || '';
-  if(!u){ alert('請先貼上 API URL'); throw new Error('no api'); }
-  if(el && el.value.trim()) localStorage.setItem('apiUrl', el.value.trim());
-  return u;
-}
+const $=sel=>document.querySelector(sel);
+const api = ()=> localStorage.getItem('apiUrl')||'';
+$('#apiUrl').value = api();
 
-// 只用 GET 查詢資料
-async function GET(p){ const r = await fetch(api()+'?'+new URLSearchParams(p)); return r.json(); }
+function setApi(v){ localStorage.setItem('apiUrl', v); }
 
-// ⛳ 重點：不要自訂 Content-Type，直接把 JSON 字串放 body，就不會觸發 CORS 預檢
-async function POST(obj){ const r = await fetch(api(), { method:'POST', body: JSON.stringify(obj) }); return r.json(); }
-
-/* 外部掃描器：掃完回這頁 ?barcode=XXXXX */
-(function(){
-  const u = new URL(location.href); const bc = u.searchParams.get('barcode');
-  if (bc){ document.getElementById('matBarcode').value = bc; lookupByBarcode(bc); history.replaceState({},'',location.pathname); }
-  const ret = encodeURIComponent(`${location.origin}${location.pathname}?barcode={CODE}`);
-  document.getElementById('extZX').href = `zxing://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,CODE_128,ITF`;
-})();
-
-/* 主檔帶入（條碼或料號） */
-let lookupTimer=null;
-async function lookupByBarcode(barcode){
-  if(!barcode) return;
-  clearTimeout(lookupTimer);
-  lookupTimer = setTimeout(async ()=>{
-    const r = await fetch(`${api()}?action=lookup&barcode=${encodeURIComponent(barcode)}`);
-    const j = await r.json();
-    if (j && j.found){
-      if (j.row.code)  matCode.value = j.row.code;
-      if (j.row.item)  matItem.value = j.row.item;
-      if (j.row.default_loc) matLoc.value = j.row.default_loc;
-    }
-  }, 200);
-}
-
-/* ZXing 相機（簡化版） */
-const video=document.getElementById('video'), camSel=document.getElementById('camSelect');
-const btnStart=document.getElementById('btnScanStart'), btnStop=document.getElementById('btnScanStop');
-let codeReader=null, stream;
-async function listCams(){
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const cams = devices.filter(d=>d.kind==='videoinput');
-  camSel.innerHTML = cams.map(c=>`<option value="${c.deviceId}">${c.label||'Camera'}</option>`).join('');
-}
-btnStart.onclick = async ()=>{
-  codeReader = new ZXing.BrowserMultiFormatReader();
-  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-  video.srcObject = stream; await video.play();
-  codeReader.decodeFromVideoDevice(null, video, (res)=>{
-    if(res){ const code = res.getText(); document.getElementById('matBarcode').value = code; lookupByBarcode(code); }
-  });
-};
-btnStop.onclick = ()=>{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } if(codeReader){ codeReader.reset(); } };
-
-/* 畫面暫存表 */
-const tbody=document.querySelector('#matTable tbody'); let data=[];
-function renderLocal(){
-  tbody.innerHTML=''; data.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
-    tbody.insertAdjacentHTML('beforeend', `<tr><td>${r.date}</td><td>${r.barcode||''}</td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stock||0}</td></tr>`);
-  });
-}
-
-/* 表單送出 */
-document.getElementById('matForm').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const d=matDate.value, bc=(matBarcode.value||'').trim(), code=matCode.value.trim(), it=matItem.value.trim(), loc=matLoc.value.trim(), exp=(matExp.value||'').trim();
-  const qIn=+matIn.value||0, qOut=+matOut.value||0;
-  const stock = data.filter(r=>r.date===d && r.code===code && r.item===it && r.loc===loc).reduce((a,c)=>a+c.in-c.out,0) + qIn - qOut;
-  const ex = data.find(r=>r.date===d && r.code===code && r.item===it && r.loc===loc);
-  if (ex){ ex.in+=qIn; ex.out+=qOut; ex.stock=stock; } else { data.push({date:d, barcode:bc, code, item:it, loc, in:qIn, out:qOut, stock}); }
-  renderLocal();
-
+$('#btnPing').onclick= async ()=>{
+  setApi($('#apiUrl').value.trim());
   try{
-    const r = await fetch(api(), {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({date:d, barcode:bc, code, item:it, loc, exp, in:qIn, out:qOut})});
-    const j = await r.json();
-    if (j && j.ok){
-      if (j.fill?.code) matCode.value = j.fill.code;
-      if (j.fill?.item) matItem.value = j.fill.item;
-      if (j.fill?.loc)  matLoc.value  = j.fill.loc;
-      const last = data.find(r=>r.date===d && r.code===(j.fill?.code||code) && r.item===(j.fill?.item||it) && r.loc===(j.fill?.loc||loc));
-      if (last) last.stock = j.onhand;
-      renderLocal();
-      saveMsg.textContent = `已寫入。現庫存：${j.onhand}`;
-      setTimeout(()=>saveMsg.textContent='', 2000);
-    }else{ saveMsg.textContent = '寫入失敗：'+(j?.error||''); }
-  }catch(err){ saveMsg.textContent = '寫入失敗：'+err; }
+    const r = await fetch(api()+'?action=ping');
+    $('#log').textContent = await r.text();
+  }catch(err){
+    $('#log').textContent = '連線失敗：'+err;
+  }
+};
 
-  e.target.reset(); matDate.value = new Date().toISOString().slice(0,10);
+$('#txBarcode').addEventListener('keydown', async (e)=>{
+  if(e.key==='Enter'){
+    const bc = $('#txBarcode').value.trim();
+    if(!bc||!api()) return;
+    const r = await fetch(api()+`?action=productbybarcode&barcode=${encodeURIComponent(bc)}`);
+    const j = await r.json();
+    if(j && j.product){
+      $('#txCode').value = j.product.code||'';
+      $('#txItem').value = j.product.item||'';
+      $('#txLoc').value  = j.product.default_loc||'';
+    }
+  }
 });
 
-/* 查詢/彙總/預警 */
-const qBody=document.querySelector('#qTable tbody');
-document.getElementById('btnQuery').onclick = async ()=>{
-  const qs = new URLSearchParams({action:'query', from:qFrom.value||'', to:qTo.value||'', code:qCode.value||'', item:qItem.value||'', loc:qLoc.value||''});
-  try{ const r=await fetch(`${api()}?${qs}`); const j=await r.json();
-    qBody.innerHTML=''; (j.rows||[]).forEach(r=>{
-      qBody.insertAdjacentHTML('beforeend', `<tr><td>${r.date||''}</td><td>${r.barcode||''}</td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stock||0}</td><td>${r.timestamp||r.ts||''}</td></tr>`);
-    });
-    if(!(j.rows||[]).length) qBody.innerHTML = `<tr><td colspan="9" class="text-muted">無資料</td></tr>`;
-  }catch(e){ qBody.innerHTML = `<tr><td colspan="9" class="text-danger">查詢失敗：${e}</td></tr>`; }
-};
-document.getElementById('btnSummary').onclick = async ()=>{
-  const qs = new URLSearchParams({action:'summary', from:qFrom.value||'', to:qTo.value||'', code:qCode.value||'', item:qItem.value||'', loc:qLoc.value||''});
-  const r=await fetch(`${api()}?${qs}`); const j=await r.json();
-  qBody.innerHTML=''; (j.rows||[]).forEach(r=>{
-    qBody.insertAdjacentHTML('beforeend', `<tr><td>${r.date||''}</td><td></td><td>${r.code||''}</td><td>${r.item||''}</td><td>${r.loc||''}</td><td>${r.in||0}</td><td>${r.out||0}</td><td>${r.stockEnd||0}</td><td></td></tr>`);
-  });
-};
-document.getElementById('btnAlerts').onclick = async ()=>{
+$('#btnSave').onclick = async ()=>{
+  if(!api()){ alert('請先設定 API URL'); return; }
+  const payload = {
+    action:'createTx',
+    data:{
+      date: $('#txDate').value,
+      barcode: $('#txBarcode').value.trim(),
+      code: $('#txCode').value.trim(),
+      item: $('#txItem').value.trim(),
+      loc: $('#txLoc').value.trim(),
+      exp: $('#txExp').value,
+      in: +($('#txIn').value||0),
+      out:+($('#txOut').value||0),
+    }
+  };
   try{
-    const r=await fetch(`${api()}?action=alerts&expWithinDays=${+warnExpDays.value||30}&lookbackDays=${+warnLookback.value||60}`); const j=await r.json();
-    expBody.innerHTML=''; (j.expiry||[]).forEach(x=> expBody.insertAdjacentHTML('beforeend', `<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc||''}</td><td>${x.exp}</td><td>${x.qty}</td><td>${x.days_left}</td></tr>`));
-    if(!j.expiry?.length) expBody.innerHTML=`<tr><td colspan="6" class="text-muted">無到期預警</td></tr>`;
-    lowBody.innerHTML=''; (j.lowStock||[]).forEach(x=> lowBody.insertAdjacentHTML('beforeend', `<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc||''}</td><td>${x.onhand}</td><td>${x.avg_daily}</td><td>${x.reorder_point}</td><td>${x.days_cover}</td><td>${x.suggest_order}</td></tr>`));
-    if(!j.lowStock?.length) lowBody.innerHTML=`<tr><td colspan="8" class="text-muted">無低庫存預警</td></tr>`;
-  }catch(e){ expBody.innerHTML=`<tr><td colspan="6" class="text-danger">預警查詢失敗：${e}</td></tr>`; lowBody.innerHTML=''; }
+    const r = await fetch(api(), {method:'POST', body: JSON.stringify(payload)});
+    const j = await r.json();
+    if(j.ok){
+      $('#saveMsg').textContent = '✅ 已寫入。庫存='+ (j.row&&j.row.stock);
+      $('#btnQuery').click();
+    }else{
+      $('#saveMsg').textContent = '❌ 失敗：'+j.error;
+    }
+  }catch(err){
+    $('#saveMsg').textContent = '❌ 發送失敗：'+err;
+  }
 };
 
-/* 初始 */
-(function(){ const t=new Date().toISOString().slice(0,10); matDate.value=t; qFrom.value=t; qTo.value=t; listCams(); })();
+$('#btnQuery').onclick = async ()=>{
+  if(!api()){ alert('API 未設定'); return; }
+  const url = new URL(api());
+  url.searchParams.set('action','query');
+  if($('#qFrom').value) url.searchParams.set('dateFrom',$('#qFrom').value);
+  if($('#qTo').value)   url.searchParams.set('dateTo',$('#qTo').value);
+  if($('#qCodeLike').value) url.searchParams.set('codeLike',$('#qCodeLike').value);
+  if($('#qItemLike').value) url.searchParams.set('itemLike',$('#qItemLike').value);
+  if($('#qLocLike').value)  url.searchParams.set('locLike',$('#qLocLike').value);
+  try{
+    const r = await fetch(url.toString());
+    const j = await r.json();
+    const tb = $('#tbl tbody'); tb.innerHTML='';
+    (j.rows||[]).forEach(x=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${x.date||''}</td><td>${x.barcode||''}</td><td>${x.code||''}</td><td>${x.item||''}</td>
+      <td>${x.loc||''}</td><td>${x.exp||''}</td><td>${x.in||0}</td><td>${x.out||0}</td><td>${x.stock||0}</td><td>${x.timestamp||''}</td>`;
+      tb.appendChild(tr);
+    });
+  }catch(err){
+    alert('查詢失敗：'+err);
+  }
+};
+
+$('#btnWarn').onclick = async ()=>{
+  const expDays = +($('#warnExp').value||30);
+  const lbDays = +($('#warnLookback').value||60);
+  const url = api()+`?action=alerts&expWithinDays=${expDays}&lookbackDays=${lbDays}`;
+  try{
+    const r = await fetch(url);
+    const j = await r.json();
+    const d = j.alerts||{};
+    const near = d.nearExp||[], low = d.lowStock||[];
+    const out = [];
+    out.push(`<h4>到期預警（${near.length}）</h4>`);
+    out.push(`<table><thead><tr><th>品項</th><th>料號</th><th>儲位</th><th>效期</th><th>剩餘量</th><th>天數</th></tr></thead><tbody>`);
+    near.forEach(x=> out.push(`<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc}</td><td>${x.exp}</td><td>${x.remain}</td><td>${x.days}</td></tr>`));
+    out.push(`</tbody></table>`);
+    out.push(`<h4>低庫存預警（${low.length}）</h4>`);
+    out.push(`<table><thead><tr><th>品項</th><th>料號</th><th>儲位</th><th>現庫存</th><th>最低庫存</th></tr></thead><tbody>`);
+    low.forEach(x=> out.push(`<tr><td>${x.item}</td><td>${x.code}</td><td>${x.loc}</td><td>${x.stock}</td><td>${x.min_stock}</td></tr>`));
+    out.push(`</tbody></table>`);
+    $('#warnOut').innerHTML = out.join('');
+  }catch(err){
+    $('#warnOut').innerHTML = '預警查詢失敗：'+err;
+  }
+};
+
+// default date today
+const t = new Date(); const y=t.toISOString().slice(0,10);
+$('#txDate').value = y;
+$('#qFrom').value = y; $('#qTo').value = y;
+
 </script>
 </body>
 </html>
