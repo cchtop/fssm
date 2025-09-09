@@ -121,12 +121,22 @@
 </div>
 
 <script>
+function localYMD(d){           // 本地 yyyy-MM-dd
+  const t = new Date(d || Date.now());
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,10);
+}
+function localISO(d){           // 本地 ISO（yyyy-MM-ddTHH:mm:ss）
+  const t = new Date(d || Date.now());
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,19);
+}
 const $ = s => document.querySelector(s);
 const apiInput = $('#api');
 const saveAPI = ()=> localStorage.setItem('fms_api', apiInput.value.trim());
 const loadAPI = ()=> apiInput.value = localStorage.getItem('fms_api') || '';
 loadAPI();
-$('#sDate').value = new Date().toISOString().slice(0,10);
+$('#sDate').value = localYMD();
 
 $('#btnTest').onclick = async()=>{
   saveAPI();
@@ -269,7 +279,7 @@ async function loadRecent(){
   (r?.rows||[]).forEach(h=>{
     const tr = document.createElement('tr');
     const link = `shipment_print.html?ship_id=${encodeURIComponent(h.ship_id)}&api=${encodeURIComponent(apiInput.value)}`;
-    tr.innerHTML = `<td class="mono">${h.ship_id}</td><td>${h.date||''}</td><td>${h.vendor||''}</td>
+    tr.innerHTML = `<td class="mono">${h.ship_id}</td><td>${localYMD(h.date)||''}</td><td>${h.vendor||''}</td>
       <td class="text-end">${Number(h.amount||0).toFixed(2)}</td>
       <td><a href="${link}" target="_blank">列印</a></td>`;
     tb.appendChild(tr);
