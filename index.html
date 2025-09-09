@@ -177,11 +177,8 @@ $('#btnTest').onclick = async()=>{
 };
 
 function ymd(d){ return (d||'').toString().slice(0,10); }
-function setLocalDate(id, d=new Date()){
-  const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); 
-  $(id).value = z.toISOString().slice(0,10);
-}
-$('#txDate').value = LocalDate();
+function today(){ return new Date().toISOString().slice(0,10); }
+$('#txDate').value = today();
 
 function fillFromProduct(p){
   if(!p) return;
