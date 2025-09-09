@@ -24,7 +24,14 @@
 
 <script>
 // -------- 本地時間工具（避免少一天） --------
-function localYMD(d){ const t=new Date(d||Date.now()); t.setMinutes(t.getMinutes()-t.getTimezoneOffset()); return t.toISOString().slice(0,10); }
+function localYMD(d){
+  if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) return d.trim();
+  const t = new Date(d);
+  if (isNaN(t)) return '';
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,10);
+}
 
 const qs = new URLSearchParams(location.search);
 const ship_id = qs.get('ship_id');
@@ -88,7 +95,7 @@ function render(H, L){
               <td>${x.item||''}</td>
               <td>${x.spec||''}</td>
               <td class="mono">${x.loc||''}</td>
-              <td>${(x.exp||'').toString().slice(0,10)}</td>
+              <td>${(localYMD(x.exp)||'').toString().slice(0,10)}</td>
               <td class="text-end">${Number(x.qty_out||0)}</td>
               <td class="text-end">${Number(x.unit_price||0).toFixed(2)}</td>
               <td class="text-end">${Number(x.amount||0).toFixed(2)}</td>
@@ -102,4 +109,3 @@ function render(H, L){
 </script>
 </body>
 </html>
-
