@@ -164,6 +164,16 @@
 </div>
 
 <script>
+function localYMD(d){           // 本地 yyyy-MM-dd
+  const t = new Date(d || Date.now());
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,10);
+}
+function localISO(d){           // 本地 ISO（yyyy-MM-ddTHH:mm:ss）
+  const t = new Date(d || Date.now());
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,19);
+}
 const $ = sel => document.querySelector(sel);
 const apiInput = $('#api');
 const saveAPI = () => localStorage.setItem('fms_api', apiInput.value.trim());
@@ -176,9 +186,18 @@ $('#btnTest').onclick = async()=>{
   $('#ping').textContent = r?.ok ? '連線成功' : '連線失敗';
 };
 
+function todayLocal() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);     // 本地 YYYY-MM-DD
+}
+// 例：日期欄預設今天
+document.getElementById('tDate').value = todayLocal();
+
 function ymd(d){ return (d||'').toString().slice(0,10); }
-function today(){ return new Date().toISOString().slice(0,10); }
-$('#txDate').value = today();
+function today(){ return localYMD(); }     // 與上方 todayLocal 邏輯一致
+$('#txDate').value = localYMD();
+
 
 function fillFromProduct(p){
   if(!p) return;
