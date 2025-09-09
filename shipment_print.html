@@ -9,6 +9,7 @@
 <style>
   body{padding:16px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .text-end{ text-align: right; }
   @media print { .no-print{ display:none } }
 </style>
 </head>
@@ -22,6 +23,9 @@
 <div id="doc" class="container"></div>
 
 <script>
+// -------- 本地時間工具（避免少一天） --------
+function localYMD(d){ const t=new Date(d||Date.now()); t.setMinutes(t.getMinutes()-t.getTimezoneOffset()); return t.toISOString().slice(0,10); }
+
 const qs = new URLSearchParams(location.search);
 const ship_id = qs.get('ship_id');
 const api = qs.get('api');
@@ -44,25 +48,36 @@ async function loadDoc(){
 function render(H, L){
   const el = document.getElementById('doc');
   const sum = (L||[]).reduce((s,x)=> s + Number(x.amount||0), 0);
+
   el.innerHTML = `
-    <div class="row">
-      <div class="col-8"><h4>出貨單</h4></div>
+    <div class="row align-items-center">
+      <div class="col-8"><h4 class="mb-0">出貨單</h4></div>
       <div class="col-4 text-end">
         <svg id="bc" class="mono"></svg>
         <div class="mono">${H.ship_id}</div>
       </div>
     </div>
-    <table class="table table-bordered table-sm">
-      <tr><th style="width:100px">出貨日期</th><td>${H.date||''}</td><th style="width:100px">客戶</th><td>${H.vendor||''}</td></tr>
-      <tr><th>聯絡人</th><td>${H.contact||''}</td><th>電話</th><td>${H.phone||''}</td></tr>
-      <tr><th>地址</th><td colspan="3">${H.addr||''}</td></tr>
-      <tr><th>備註</th><td colspan="3">${H.note||''}</td></tr>
+
+    <table class="table table-bordered table-sm mt-3">
+      <tbody>
+        <tr>
+          <th style="width:100px">出貨日期</th><td style="width:220px">${localYMD(H.date)||''}</td>
+          <th style="width:100px">客戶</th><td>${H.vendor||''}</td>
+        </tr>
+        <tr><th>聯絡人</th><td>${H.contact||''}</td><th>電話</th><td>${H.phone||''}</td></tr>
+        <tr><th>地址</th><td colspan="3">${H.addr||''}</td></tr>
+        <tr><th>備註</th><td colspan="3">${H.note||''}</td></tr>
+      </tbody>
     </table>
+
     <div class="table-responsive">
       <table class="table table-bordered table-sm">
         <thead class="table-light"><tr>
-          <th class="text-center">項次</th><th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th>
-          <th class="text-end">數量</th><th class="text-end">單價</th><th class="text-end">金額</th>
+          <th class="text-center" style="width:60px">項次</th>
+          <th>條碼</th><th>料號</th><th>品項</th><th>規格</th><th>儲位</th><th>效期</th>
+          <th class="text-end" style="width:100px">數量</th>
+          <th class="text-end" style="width:100px">單價</th>
+          <th class="text-end" style="width:120px">金額</th>
         </tr></thead>
         <tbody>
           ${(L||[]).map((x,i)=>`
@@ -74,7 +89,7 @@ function render(H, L){
               <td>${x.spec||''}</td>
               <td class="mono">${x.loc||''}</td>
               <td>${(x.exp||'').toString().slice(0,10)}</td>
-              <td class="text-end">${x.qty_out||0}</td>
+              <td class="text-end">${Number(x.qty_out||0)}</td>
               <td class="text-end">${Number(x.unit_price||0).toFixed(2)}</td>
               <td class="text-end">${Number(x.amount||0).toFixed(2)}</td>
             </tr>`).join('')}
@@ -87,3 +102,4 @@ function render(H, L){
 </script>
 </body>
 </html>
+
