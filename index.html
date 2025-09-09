@@ -175,7 +175,14 @@ $('#btnTest').onclick = async()=>{
   const r = await fetch(apiInput.value + '?mode=ready').then(r=>r.json()).catch(()=>null);
   $('#ping').textContent = r?.ok ? '連線成功' : '連線失敗';
 };
-
+function localYMD(d){
+  if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) return d.trim();
+  const t = new Date(d);
+  if (isNaN(t)) return '';
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,10);
+}
 function ymd(d){ return (d||'').toString().slice(0,10); }
 function today(){ return new Date().toISOString().slice(0,10); }
 $('#txDate').value = today();
