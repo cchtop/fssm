@@ -31,6 +31,7 @@
   <div class="card-body">
     <div class="input-group mb-2">
       <input id="scanText" class="form-control mono" placeholder="已掃入條碼會顯示於此，也可手動輸入">
+	  <button id="btnIntent" class="btn btn-outline-secondary" onclick="externalScan()">用外部掃描器（Intent）</button>
       <button class="btn btn-outline-secondary" id="btnExt">用外部掃描器（Intent）</button>
       <button class="btn btn-outline-secondary" id="btnPhoto">拍照條碼（備援）</button>
     </div>
@@ -205,6 +206,57 @@ function fillFromProduct(p){
   $('#txItem').value = p.item || '';
   $('#txLoc').value  = p.default_loc || '';
 }
+// 讓 TeaCapps / ZXing 掃描完回到本頁：?barcode=xxxx
+function buildRetUrl() {
+  // 直接回到目前頁（index 或 shipping）並帶入 ?barcode=
+  return encodeURIComponent(`${location.origin}${location.pathname}?barcode={CODE}`);
+}
+
+// 以最相容順序觸發外部掃描器：TeaCapps → ZXing → zxing://
+function externalScan() {
+  const ret = buildRetUrl();
+  const play = 'https://play.google.com/store/apps/details?id=com.teacapps.barcodescanner';
+
+  // ① TeaCapps（推薦）— Android Chrome 的標準 Intent URI
+  const teacapps =
+    `intent://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,QR_CODE#Intent;` +
+    `scheme=zxing;package=com.teacapps.barcodescanner;` +
+    `S.browser_fallback_url=${encodeURIComponent(play)};end`;
+
+  // ② 官方 ZXing（有些機型仍裝這個）
+  const zxingIntent =
+    `intent://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,QR_CODE#Intent;` +
+    `scheme=zxing;package=com.google.zxing.client.android;end`;
+
+  // ③ 老式 zxing:// scheme（部分瀏覽器支援）
+  const zxingScheme = `zxing://scan/?ret=${ret}&SCAN_FORMATS=EAN_13,EAN_8,UPC_A,QR_CODE`;
+
+  // 依序嘗試，必須在使用者點擊的同一個事件中呼叫
+  // 先試 TeaCapps
+  location.href = teacapps;
+
+  // 800ms 內沒有跳走（沒有進入 App）就試 ZXing
+  let jumped = false;
+  const t1 = setTimeout(() => {
+    if (document.visibilityState === 'hidden') { jumped = true; return; }
+    location.href = zxingIntent;
+  }, 800);
+
+  // 再 800ms 還是沒跳走，就試 zxing://
+  const t2 = setTimeout(() => {
+    if (jumped || document.visibilityState === 'hidden') return;
+    location.href = zxingScheme;
+  }, 1600);
+}
+
+// 讀取 ?barcode= 回填（你原本已做就保留；這裡保險再做一次）
+function readBarcodeTo(elSelector) {
+  const b = new URL(location.href).searchParams.get('barcode');
+  if (b) {
+    const el = document.querySelector(elSelector);
+    if (el) { el.value = b; el.dispatchEvent(new Event('change')); }
+  }
+}
 
 // 外部掃碼 Intent：zxing
 $('#btnExt').onclick = ()=>{
@@ -217,7 +269,7 @@ $('#btnPhoto').onclick = ()=>{
   const ret = location.origin + location.pathname + '?barcode={CODE}';
   location.href = 'zxing://scan/?ret=' + encodeURIComponent(ret);
 };
-
+readBarcodeTo('#t_bar');   // 讓 ?barcode=xxxx 自動填到條碼欄位
 // 若網址有 ?barcode= 自動回填
 const bc = new URLSearchParams(location.search).get('barcode');
 if (bc) { $('#scanText').value = bc; $('#txBarcode').value = bc; tryFetchProductByAny(); }
