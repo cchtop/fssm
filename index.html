@@ -222,6 +222,12 @@ async function tryFetchProductByAny(){
   const r = await fetch(url).then(r=>r.json()).catch(()=>null);
   if(r?.ok && r.product) fillFromProduct(r.product);
 }
+function todayLocal(){
+  const t = new Date();
+  t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  return t.toISOString().slice(0,10);
+}
+document.getElementById('txDate').value = todayLocal();
 
 $('#btnAdd').onclick = async()=>{
   saveAPI();
@@ -243,8 +249,11 @@ $('#btnAdd').onclick = async()=>{
                   .then(r=>r.json()).catch(e=>({ok:false,msg:String(e)}));
   $('#addMsg').textContent = r.ok ? `完成，庫存=${r.stock}` : `失敗：${r.msg||'N/A'}`;
 };
-function localYMD(d){           // 本地 yyyy-MM-dd
-  const t = new Date(d || Date.now());
+function ymd(d){
+  if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) return d.trim();
+  const t = new Date(d);
+  if (isNaN(t)) return '';
   t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
   return t.toISOString().slice(0,10);
 }
@@ -267,12 +276,12 @@ $('#btnQuery').onclick = async()=>{
   (r?.rows||[]).forEach(t=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${ymd(t.date)}</td>
+      <td>${localYMD(t.date)}</td>
       <td class="mono">${t.barcode||''}</td>
       <td class="mono">${t.code||''}</td>
       <td>${t.item||''}</td>
       <td class="mono">${t.loc||''}</td>
-      <td>${ymd(t.exp)||''}</td>
+      <td>${localYMD(t.exp)||''}</td>
       <td class="text-end">${t.in||0}</td>
       <td class="text-end">${t.out||0}</td>
       <td class="text-end">${t.stock||''}</td>
@@ -302,8 +311,8 @@ $('#btnSum').onclick = ()=>{
   const tb2 = $('#qTable tbody'); tb2.innerHTML='';
   [...map.values()].forEach(r=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.date}</td><td></td><td class="mono">${r.code}</td><td>${r.item}</td>
-      <td class="mono">${r.loc}</td><td>${r.exp}</td>
+    tr.innerHTML = `<td>${localYMD(r.date)}</td><td></td><td class="mono">${r.code}</td><td>${r.item}</td>
+      <td class="mono">${r.loc}</td><td>${localYMD(r.exp)}</td>
       <td class="text-end">${r.in}</td><td class="text-end">${r.out}</td><td></td><td></td>`;
     tb2.appendChild(tr);
   });
@@ -322,7 +331,7 @@ $('#btnWarn').onclick = async()=>{
   (r?.exp||[]).forEach(x=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${x.item||''}</td><td class="mono">${x.code||''}</td>
-      <td class="mono">${x.loc||''}</td><td>${x.exp||''}</td><td class="text-end">${x.qty||0}</td>`;
+      <td class="mono">${x.loc||''}</td><td>${localYMD(x.exp)||''}</td><td class="text-end">${x.qty||0}</td>`;
     tbE.appendChild(tr);
   });
   // 低庫存
