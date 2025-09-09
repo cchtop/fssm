@@ -4,274 +4,328 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>線上倉儲管理</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
 <style>
-  body{ padding:14px; }
-  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-  .num{ text-align:right; }
-  .hint{ color:#6c757d; font-size:.9rem; }
+  body{padding:16px}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+  .small-note{font-size:.9rem;color:#666}
+  .table-fixed{table-layout:fixed}
 </style>
 </head>
 <body>
-<h5>線上倉儲管理</h5>
+<h4 class="mb-3">線上倉儲管理</h4>
 
 <div class="mb-3">
   <label class="form-label">API URL（GAS /exec）</label>
-  <input id="api" class="form-control mono" placeholder="https://script.google.com/macros/s/XXXXX/exec">
-  <div class="d-flex gap-2 mt-2">
-    <button id="btnTest" class="btn btn-outline-primary btn-sm">連線測試</button>
-    <a class="btn btn-link btn-sm" href="shipping.html">前往出貨管理</a>
+  <input id="api" class="form-control" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+  <div class="mt-2">
+    <button class="btn btn-outline-primary btn-sm" id="btnTest">連線測試</button>
+    <span id="ping" class="ms-2 small-note"></span>
+  </div>
+  <div class="small-note mt-1">會儲存在本機瀏覽器（兩頁共用）。</div>
+</div>
+
+<!-- 掃碼（用外部掃描器 Intent） -->
+<div class="card mb-3">
+  <div class="card-header">掃碼新增（條碼/QR）</div>
+  <div class="card-body">
+    <div class="input-group mb-2">
+      <input id="scanText" class="form-control mono" placeholder="已掃入條碼會顯示於此，也可手動輸入">
+      <button class="btn btn-outline-secondary" id="btnExt">用外部掃描器（Intent）</button>
+      <button class="btn btn-outline-secondary" id="btnPhoto">拍照條碼（備援）</button>
+    </div>
+    <div class="small-note">外部掃描器建議：TeacApps「Barcode Scanner」。</div>
   </div>
 </div>
 
-<!-- 單筆新增/更新 -->
-<div class="mb-3">
-  <h6>單筆新增 / 更新</h6>
-  <div class="row g-2">
+<!-- 新增/更新 -->
+<div class="card mb-3">
+  <div class="card-header">單筆新增/更新</div>
+  <div class="card-body row g-2">
     <div class="col-6 col-md-3">
       <label class="form-label">日期</label>
-      <input id="t_date" type="date" class="form-control">
+      <input id="txDate" type="date" class="form-control">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label">條碼</label>
-      <div class="input-group">
-        <input id="t_bar" class="form-control mono" placeholder="可掃描自動帶入">
-        <button id="btnIntent" class="btn btn-outline-secondary">用外部掃描器（Intent）</button>
-      </div>
+      <input id="txBarcode" class="form-control mono" placeholder="可由掃碼自動帶入">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label">料號</label>
-      <input id="t_code" class="form-control mono">
+      <input id="txCode" class="form-control mono">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label">品項</label>
-      <input id="t_item" class="form-control">
+      <input id="txItem" class="form-control">
     </div>
-
     <div class="col-4 col-md-2">
       <label class="form-label">儲位</label>
-      <input id="t_loc" class="form-control mono">
+      <input id="txLoc" class="form-control mono">
     </div>
-    <div class="col-4 col-md-2">
+    <div class="col-8 col-md-4">
       <label class="form-label">效期</label>
-      <input id="t_exp" type="date" class="form-control">
+      <input id="txExp" type="date" class="form-control">
     </div>
-    <div class="col-4 col-md-2">
-      <label class="form-label">進料(+)</label>
-      <input id="t_in" type="number" class="form-control num" value="0">
+    <div class="col-6 col-md-3">
+      <label class="form-label">進料量(+)</label>
+      <input id="txIn" type="number" class="form-control" value="0">
     </div>
-    <div class="col-4 col-md-2">
-      <label class="form-label">領料(-)</label>
-      <input id="t_out" type="number" class="form-control num" value="0">
+    <div class="col-6 col-md-3">
+      <label class="form-label">領料量(-)</label>
+      <input id="txOut" type="number" class="form-control" value="0">
     </div>
-  </div>
-  <div class="mt-2">
-    <button id="btnSave" class="btn btn-primary">新增 / 更新</button>
-    <span class="ms-2 hint">外部掃描器：安裝 **TeaCapps(Barcode Scanner)** 後，點上方按鈕即可。</span>
+    <div class="col-12">
+      <button class="btn btn-primary" id="btnAdd">新增 / 更新</button>
+      <span id="addMsg" class="ms-2 small-note"></span>
+    </div>
   </div>
 </div>
 
-<!-- 線上查詢 -->
-<div class="mb-3">
-  <h6>線上查詢（Google Sheet）</h6>
-  <div class="row g-2">
+<!-- 查詢 -->
+<div class="card mb-3">
+  <div class="card-header">線上查詢（Google Sheet）</div>
+  <div class="card-body row g-2">
     <div class="col-6 col-md-3">
       <label class="form-label">日期自</label>
-      <input id="q_from" type="date" class="form-control">
+      <input id="qFrom" type="date" class="form-control">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label">日期至</label>
-      <input id="q_to" type="date" class="form-control">
+      <input id="qTo" type="date" class="form-control">
     </div>
     <div class="col-6 col-md-2">
       <label class="form-label">料號含</label>
-      <input id="q_code" class="form-control">
+      <input id="qCode" class="form-control mono">
     </div>
     <div class="col-6 col-md-2">
       <label class="form-label">品項含</label>
-      <input id="q_item" class="form-control">
+      <input id="qItem" class="form-control">
     </div>
     <div class="col-6 col-md-2">
-      <label class="form-label">儲位含</label>
-      <input id="q_loc" class="form-control">
+      <label class="form-label">儲位</label>
+      <input id="qLoc" class="form-control mono">
     </div>
-  </div>
-  <div class="mt-2">
-    <button id="btnQuery" class="btn btn-outline-primary">查詢</button>
-  </div>
-  <div class="table-responsive mt-2">
-    <table id="tblQ" class="table table-sm table-striped">
-      <thead class="table-light">
-        <tr><th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th>
-            <th>效期</th><th class="num">進</th><th class="num">出</th><th class="num">庫存</th><th>寫入時間</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="col-12">
+      <button class="btn btn-outline-primary" id="btnQuery">查詢</button>
+      <button class="btn btn-outline-secondary" id="btnSum">彙總（同日×料號×品項×儲位）</button>
+      <a class="btn btn-link" href="shipping.html">➜ 前往出貨管理</a>
+    </div>
+    <div class="col-12">
+      <div class="table-responsive mt-2">
+        <table class="table table-sm table-striped table-fixed" id="qTable">
+          <thead class="table-light">
+            <tr>
+              <th>日期</th><th>條碼</th><th>料號</th><th>品項</th><th>儲位</th><th>效期</th>
+              <th>進</th><th>出</th><th>庫存</th><th>寫入時間</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- 預警 -->
-<div class="mb-3">
-  <h6>預警檢查</h6>
-  <div class="row g-2">
+<div class="card mb-5">
+  <div class="card-header">預警檢查</div>
+  <div class="card-body row g-2">
     <div class="col-6 col-md-3">
       <label class="form-label">到期天數內</label>
-      <input id="w_days" type="number" class="form-control" value="30">
+      <input id="wDays" type="number" class="form-control" value="30">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label">近N日平均用量</label>
-      <input id="w_avg" type="number" class="form-control" value="60">
+      <input id="wAvg" type="number" class="form-control" value="60">
     </div>
-  </div>
-  <div class="mt-2 d-flex gap-2">
-    <button id="btnExp" class="btn btn-outline-warning">檢查到期</button>
-    <button id="btnLow" class="btn btn-outline-danger">檢查低庫存</button>
-  </div>
-
-  <div class="mt-3">
-    <h6>到期預警</h6>
-    <div class="table-responsive">
-      <table id="tblWX" class="table table-sm table-striped">
-        <thead class="table-light">
-          <tr><th>品項</th><th>料號</th><th>儲位</th><th>效期</th><th class="num">剩餘量</th><th class="num">天數</th></tr>
-        </thead><tbody></tbody>
-      </table>
+    <div class="col-12">
+      <button id="btnWarn" class="btn btn-outline-danger">檢查預警</button>
+      <span id="wMsg" class="small-note ms-2"></span>
     </div>
-
-    <h6>低庫存預警</h6>
-    <div class="table-responsive">
-      <table id="tblWL" class="table table-sm table-striped">
-        <thead class="table-light"><tr><th>品項</th><th>料號</th><th class="num">現庫存</th><th class="num">最低庫存</th></tr></thead>
-        <tbody></tbody>
-      </table>
+    <div class="col-12 mt-3">
+      <h6>到期預警</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped" id="wExp">
+          <thead class="table-light"><tr>
+            <th>品項</th><th>料號</th><th>儲位</th><th>效期</th><th>剩餘量</th>
+          </tr></thead><tbody></tbody>
+        </table>
+      </div>
+      <h6 class="mt-3">低庫存預警</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped" id="wLow">
+          <thead class="table-light"><tr>
+            <th>品項</th><th>料號</th><th>儲位</th><th>現庫存</th><th>近日均用</th><th>最低庫存</th>
+          </tr></thead><tbody></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-const $=s=>document.querySelector(s);
-const api = {
-  get url(){ return localStorage.getItem('API_URL')||''; },
-  set url(v){ localStorage.setItem('API_URL', v||''); },
-  get token(){ return localStorage.getItem('API_TOKEN')||''; },
-  set token(v){ localStorage.setItem('API_TOKEN', v||''); }
+const $ = sel => document.querySelector(sel);
+const apiInput = $('#api');
+const saveAPI = () => localStorage.setItem('fms_api', apiInput.value.trim());
+const loadAPI = () => apiInput.value = localStorage.getItem('fms_api') || '';
+loadAPI();
+
+$('#btnTest').onclick = async()=>{
+  saveAPI();
+  const r = await fetch(apiInput.value + '?mode=ready').then(r=>r.json()).catch(()=>null);
+  $('#ping').textContent = r?.ok ? '連線成功' : '連線失敗';
 };
-function setLocalDate(el, d=new Date()){
-  const z = new Date(d.getTime() - d.getTimezoneOffset()*60000);
-  $(el).value = z.toISOString().slice(0,10);
-}
-function num(v){ return Number(v||0); }
 
-async function GET(params){
-  const base = $('#api').value.trim(); if(!base) throw new Error('未設定 API');
-  params = params || {};
-  const token = api.token; if(token) params.token = token;
-  const r = await fetch(base + '?' + new URLSearchParams(params).toString());
-  return await r.json();
-}
-async function POST(body){
-  const base = $('#api').value.trim(); if(!base) throw new Error('未設定 API');
-  const token = api.token; if(token) body.token = token;
-  const r = await fetch(base, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  return await r.json();
-}
+function ymd(d){ return (d||'').toString().slice(0,10); }
+function today(){ return new Date().toISOString().slice(0,10); }
+$('#txDate').value = today();
 
-function fillByProduct(p){
+function fillFromProduct(p){
   if(!p) return;
-  $('#t_code').value = p.code||'';
-  $('#t_item').value = p.item||'';
-  if(!$('#t_loc').value) $('#t_loc').value = p.default_loc||'';
+  $('#txCode').value = p.code || '';
+  $('#txItem').value = p.item || '';
+  $('#txLoc').value  = p.default_loc || '';
 }
 
-window.addEventListener('DOMContentLoaded', async ()=>{
-  $('#api').value = api.url;
-  setLocalDate('#t_date'); setLocalDate('#t_exp');
-  setLocalDate('#q_from', new Date(Date.now()-7*86400000)); setLocalDate('#q_to');
+// 外部掃碼 Intent：zxing
+$('#btnExt').onclick = ()=>{
+  const ret = location.origin + location.pathname + '?barcode={CODE}';
+  location.href = 'zxing://scan/?ret=' + encodeURIComponent(ret);
+};
 
-  // query string ?barcode=...
-  const qs = new URL(location.href).searchParams;
-  const qb = qs.get('barcode'); if(qb){ $('#t_bar').value = qb; }
+// 備援「拍照條碼」：走 Intent 的 URL 型式（很多 App 支援）
+$('#btnPhoto').onclick = ()=>{
+  const ret = location.origin + location.pathname + '?barcode={CODE}';
+  location.href = 'zxing://scan/?ret=' + encodeURIComponent(ret);
+};
 
-  $('#btnTest').addEventListener('click', async ()=>{
-    try{ api.url=$('#api').value.trim();
-      const j=await GET({action:'ping'}); alert(j.ok?'連線成功！':'失敗');
-    }catch(err){ alert('錯誤：'+err.message); }
-  });
+// 若網址有 ?barcode= 自動回填
+const bc = new URLSearchParams(location.search).get('barcode');
+if (bc) { $('#scanText').value = bc; $('#txBarcode').value = bc; tryFetchProductByAny(); }
 
-  $('#btnIntent').addEventListener('click', ()=>{
-    location.href='intent:#Intent;action=com.google.zxing.client.android.SCAN;scheme=zxing;package=com.teacapps.barcodescanner;end';
-  });
-
-  // 條碼 / 料號輸入後自動帶出產品
-  async function probe(key){
-    let j = await GET({action:'product', barcode:key});
-    if(!j.ok || !j.row){ j = await GET({action:'product', code:key}); }
-    fillByProduct(j.row||{});
-  }
-  $('#t_bar').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); probe(e.target.value.trim()); }});
-  $('#t_code').addEventListener('blur', e=>{ const v=e.target.value.trim(); if(v) probe(v); });
-
-  $('#btnSave').addEventListener('click', async ()=>{
-    const row = {
-      date: $('#t_date').value || undefined,
-      barcode: $('#t_bar').value,
-      code: $('#t_code').value,
-      item: $('#t_item').value,
-      loc: $('#t_loc').value,
-      exp: $('#t_exp').value,
-      in:  num($('#t_in').value),
-      out: num($('#t_out').value),
-    };
-    const j = await POST({action:'tx_create', row});
-    if(!j.ok) return alert(j.msg||'寫入失敗');
-    alert('已寫入！');
-    $('#btnQuery').click();
-  });
-
-  $('#btnQuery').addEventListener('click', async ()=>{
-    const j=await GET({
-      action:'tx_query',
-      date_from: $('#q_from').value,
-      date_to:   $('#q_to').value,
-      code: $('#q_code').value, item: $('#q_item').value, loc: $('#q_loc').value
-    });
-    const tb = $('#tblQ tbody'); tb.innerHTML='';
-    (j.rows||[]).forEach(r=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML = `<td>${r.date||''}</td><td class="mono">${r.barcode||''}</td><td class="mono">${r.code||''}</td>
-                      <td>${r.item||''}</td><td class="mono">${r.loc||''}</td><td>${r.exp||''}</td>
-                      <td class="num">${num(r.in)}</td><td class="num">${num(r.out)}</td>
-                      <td class="num">${num(r.stock)}</td><td>${r.timestamp||''}</td>`;
-      tb.appendChild(tr);
-    });
-  });
-
-  $('#btnExp').addEventListener('click', async ()=>{
-    const j=await GET({action:'warn_expiry', within_days: $('#w_days').value||30});
-    const tb=$('#tblWX tbody'); tb.innerHTML='';
-    (j.rows||[]).forEach(r=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${r.item||''}</td><td class="mono">${r.code||''}</td>
-                    <td class="mono">${r.loc||''}</td><td>${r.exp||''}</td>
-                    <td class="num">${num(r.remain)}</td><td class="num">${r.days}</td>`;
-      tb.appendChild(tr);
-    });
-  });
-
-  $('#btnLow').addEventListener('click', async ()=>{
-    const j=await GET({action:'warn_lowstock'});
-    const tb=$('#tblWL tbody'); tb.innerHTML='';
-    (j.rows||[]).forEach(r=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${r.item||''}</td><td class="mono">${r.code||''}</td>
-                    <td class="num">${num(r.stock)}</td><td class="num">${num(r.min_stock)}</td>`;
-      tb.appendChild(tr);
-    });
-  });
-
-  // 預設先查一次
-  $('#btnQuery').click();
+$('#scanText').addEventListener('change', ()=>{
+  $('#txBarcode').value = $('#scanText').value.trim();
+  tryFetchProductByAny();
 });
+$('#txBarcode').addEventListener('change', tryFetchProductByAny);
+$('#txCode').addEventListener('change', tryFetchProductByAny);
+
+async function tryFetchProductByAny(){
+  saveAPI();
+  const b = $('#txBarcode').value.trim();
+  const c = $('#txCode').value.trim();
+  if (!apiInput.value) return;
+  let url = apiInput.value + '?mode=product';
+  if (b) url += '&barcode='+encodeURIComponent(b);
+  else if (c) url += '&code='+encodeURIComponent(c);
+  else return;
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if(r?.ok && r.product) fillFromProduct(r.product);
+}
+
+$('#btnAdd').onclick = async()=>{
+  saveAPI();
+  const body = {
+    mode: 'tx',
+    tx: {
+      date: $('#txDate').value,
+      barcode: $('#txBarcode').value.trim(),
+      code: $('#txCode').value.trim(),
+      item: $('#txItem').value.trim(),
+      loc: $('#txLoc').value.trim(),
+      exp: $('#txExp').value,
+      in: Number($('#txIn').value||0),
+      out: Number($('#txOut').value||0)
+    }
+  };
+  $('#addMsg').textContent = '處理中…';
+  const r = await fetch(apiInput.value, {method:'POST', body: JSON.stringify(body)})
+                  .then(r=>r.json()).catch(e=>({ok:false,msg:String(e)}));
+  $('#addMsg').textContent = r.ok ? `完成，庫存=${r.stock}` : `失敗：${r.msg||'N/A'}`;
+};
+
+$('#btnQuery').onclick = async()=>{
+  saveAPI();
+  const url = new URL(apiInput.value);
+  url.searchParams.set('mode','query');
+  if($('#qFrom').value) url.searchParams.set('from',$('#qFrom').value);
+  if($('#qTo').value)   url.searchParams.set('to',$('#qTo').value);
+  if($('#qCode').value) url.searchParams.set('code',$('#qCode').value);
+  if($('#qItem').value) url.searchParams.set('item',$('#qItem').value);
+  if($('#qLoc').value)  url.searchParams.set('loc',$('#qLoc').value);
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  const tb = $('#qTable tbody'); tb.innerHTML = '';
+  (r?.rows||[]).forEach(t=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${ymd(t.date)}</td>
+      <td class="mono">${t.barcode||''}</td>
+      <td class="mono">${t.code||''}</td>
+      <td>${t.item||''}</td>
+      <td class="mono">${t.loc||''}</td>
+      <td>${ymd(t.exp)||''}</td>
+      <td class="text-end">${t.in||0}</td>
+      <td class="text-end">${t.out||0}</td>
+      <td class="text-end">${t.stock||''}</td>
+      <td class="mono">${t.timestamp||''}</td>`;
+    tb.appendChild(tr);
+  });
+};
+
+$('#btnSum').onclick = ()=>{
+  const tb = $('#qTable tbody');
+  const rows = [...tb.querySelectorAll('tr')].map(tr=>{
+    const td = tr.querySelectorAll('td');
+    return {
+      date: td[0].textContent, barcode: td[1].textContent, code: td[2].textContent,
+      item: td[3].textContent, loc: td[4].textContent, exp: td[5].textContent,
+      in: Number(td[6].textContent||0), out: Number(td[7].textContent||0)
+    };
+  });
+  const key = r=>[r.date,r.code,r.item,r.loc].join('|');
+  const map = new Map();
+  rows.forEach(r=>{
+    const k = key(r);
+    const v = map.get(k)||{...r,in:0,out:0};
+    v.in += r.in; v.out += r.out;
+    map.set(k,v);
+  });
+  const tb2 = $('#qTable tbody'); tb2.innerHTML='';
+  [...map.values()].forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.date}</td><td></td><td class="mono">${r.code}</td><td>${r.item}</td>
+      <td class="mono">${r.loc}</td><td>${r.exp}</td>
+      <td class="text-end">${r.in}</td><td class="text-end">${r.out}</td><td></td><td></td>`;
+    tb2.appendChild(tr);
+  });
+};
+
+$('#btnWarn').onclick = async()=>{
+  saveAPI();
+  const url = new URL(apiInput.value);
+  url.searchParams.set('mode','warn');
+  url.searchParams.set('days',$('#wDays').value||30);
+  url.searchParams.set('avgDays',$('#wAvg').value||60);
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  $('#wMsg').textContent = r?.ok ? '完成' : '失敗';
+  // 到期
+  const tbE = $('#wExp tbody'); tbE.innerHTML='';
+  (r?.exp||[]).forEach(x=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${x.item||''}</td><td class="mono">${x.code||''}</td>
+      <td class="mono">${x.loc||''}</td><td>${x.exp||''}</td><td class="text-end">${x.qty||0}</td>`;
+    tbE.appendChild(tr);
+  });
+  // 低庫存
+  const tbL = $('#wLow tbody'); tbL.innerHTML='';
+  (r?.low||[]).forEach(x=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${x.item||''}</td><td class="mono">${x.code||''}</td>
+      <td class="mono">${x.loc||''}</td><td class="text-end">${x.current||0}</td>
+      <td class="text-end">${x.avg_per_day||0}</td><td class="text-end">${x.min_stock||0}</td>`;
+    tbL.appendChild(tr);
+  });
+};
 </script>
 </body>
 </html>
